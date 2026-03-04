@@ -1,10 +1,11 @@
-const BACKEND_URL = "https://fjrmhri-Space_Deteksi_Hoax_TA.hf.space";
+const BACKEND_ANALYZE_URL_DEV = "http://127.0.0.1:7860/analyze";
+const BACKEND_ANALYZE_URL_PROD = "https://fjrmhri-space-deteksi-hoax-ta.hf.space/analyze";
+const IS_LOCAL = ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
+const ANALYZE_ENDPOINT = IS_LOCAL ? BACKEND_ANALYZE_URL_DEV : BACKEND_ANALYZE_URL_PROD;
 
 const analyzeForm = document.getElementById("analyzeForm");
 const inputText = document.getElementById("inputText");
-const backendUrlInput = document.getElementById("backendUrl");
 const includeNerInput = document.getElementById("includeNer");
-const orangeThresholdInput = document.getElementById("orangeThreshold");
 const resetBtn = document.getElementById("resetBtn");
 const copyBtn = document.getElementById("copyBtn");
 
@@ -27,8 +28,6 @@ const sumLowConf = document.getElementById("sumLowConf");
 
 let latestResponse = null;
 
-backendUrlInput.value = BACKEND_URL;
-
 function escapeHtml(value) {
   return String(value)
     .replace(/&/g, "&amp;")
@@ -40,11 +39,6 @@ function escapeHtml(value) {
 
 function pct(value) {
   return `${(Number(value) * 100).toFixed(2)}%`;
-}
-
-function getBackendUrl() {
-  const raw = backendUrlInput.value.trim() || BACKEND_URL;
-  return raw.replace(/\/+$/, "");
 }
 
 function setLoading(isLoading) {
@@ -203,22 +197,14 @@ analyzeForm.addEventListener("submit", async (event) => {
     return;
   }
 
-  const threshold = Number(orangeThresholdInput.value);
-  if (Number.isNaN(threshold) || threshold < 0 || threshold > 1) {
-    showError("Ambang oranye harus angka 0 sampai 1.");
-    return;
-  }
-
   setLoading(true);
   try {
-    const endpoint = `${getBackendUrl()}/analyze`;
-    const response = await fetch(endpoint, {
+    const response = await fetch(ANALYZE_ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         text,
         include_ner: includeNerInput.checked,
-        confidence_orange_threshold: threshold,
       }),
     });
 

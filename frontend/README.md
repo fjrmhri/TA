@@ -10,20 +10,25 @@ Frontend ini adalah static site untuk menampilkan:
 
 - Textarea input besar + tombol `Periksa`
 - Toggle `Tampilkan NER`
-- Input `Backend URL` (override cepat saat deploy)
-- Input threshold confidence oranye
 - Loader + error box
 - Tombol `Reset`
 - Tombol `Copy hasil`
 
-## Konfigurasi Backend URL
+## Konfigurasi Endpoint Backend (non-UI)
 
-Default backend URL ada di `app.js`:
+Endpoint diatur langsung di `app.js`:
 ```js
-const BACKEND_URL = "http://127.0.0.1:7860";
+const BACKEND_ANALYZE_URL_DEV = "http://127.0.0.1:7860/analyze";
+const BACKEND_ANALYZE_URL_PROD = "https://fjrmhri-space-deteksi-hoax-ta.hf.space/analyze";
+const IS_LOCAL = ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
+const ANALYZE_ENDPOINT = IS_LOCAL ? BACKEND_ANALYZE_URL_DEV : BACKEND_ANALYZE_URL_PROD;
 ```
 
-Saat runtime, URL bisa diubah lewat field `Backend URL` di UI.
+Sebelum deploy, ubah `BACKEND_ANALYZE_URL_PROD` bila endpoint produksi Anda berubah.
+
+Catatan threshold warna:
+- Threshold oranye default berasal dari backend (`ORANGE_THRESHOLD=0.65`).
+- Frontend tidak menampilkan input threshold dan tidak mengirim field threshold pada request.
 
 ## Skema Data yang Diharapkan
 
