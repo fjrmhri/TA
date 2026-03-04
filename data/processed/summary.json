@@ -1,0 +1,72 @@
+{
+  "output_dir": "D:\\TA\\code\\Berita_Hoax\\data\\processed",
+  "rows_total": 46755,
+  "train": {
+    "rows": 32730,
+    "label_dist": {
+      "0": 24095,
+      "1": 8635
+    },
+    "source_label": {
+      "0": {
+        "cnn": 567,
+        "detik": 12946,
+        "kompas": 3400,
+        "turnbackhoax": 7182
+      },
+      "1": {
+        "cnn": 0,
+        "detik": 0,
+        "kompas": 0,
+        "turnbackhoax": 8635
+      }
+    }
+  },
+  "val": {
+    "rows": 7021,
+    "label_dist": {
+      "0": 5170,
+      "1": 1851
+    },
+    "source_label": {
+      "0": {
+        "cnn": 115,
+        "detik": 2777,
+        "kompas": 732,
+        "turnbackhoax": 1546
+      },
+      "1": {
+        "cnn": 0,
+        "detik": 0,
+        "kompas": 0,
+        "turnbackhoax": 1851
+      }
+    }
+  },
+  "test": {
+    "rows": 7004,
+    "label_dist": {
+      "0": 5183,
+      "1": 1821
+    },
+    "source_label": {
+      "0": {
+        "cnn": 121,
+        "detik": 2755,
+        "kompas": 778,
+        "turnbackhoax": 1529
+      },
+      "1": {
+        "cnn": 0,
+        "detik": 0,
+        "kompas": 0,
+        "turnbackhoax": 1821
+      }
+    }
+  },
+  "files": {
+    "train": "D:\\TA\\code\\Berita_Hoax\\data\\processed\\train.csv",
+    "val": "D:\\TA\\code\\Berita_Hoax\\data\\processed\\val.csv",
+    "test": "D:\\TA\\code\\Berita_Hoax\\data\\processed\\test.csv"
+  }
+}

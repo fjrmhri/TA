@@ -1,115 +1,91 @@
-# Backend (Hugging Face Spaces Docker + FastAPI)
+# Backend (FastAPI + Hugging Face Spaces Docker)
 
-Backend ini menyediakan analisis deteksi hoaks per kalimat + NER opsional untuk teks multi paragraf.
+Backend ini menyediakan analisis hoaks per kalimat dengan preprocessing konsisten:
+- split paragraf (`blank line`)
+- split kalimat (regex ringan)
+- klasifikasi per kalimat + ringkasan per paragraf
+- NER opsional (default CPU, `cahya/bert-base-indonesian-NER`)
 
 ## Endpoint
 
-- `GET /health`  
-  Response: `{"status":"ok"}`
-
-- `POST /analyze`  
-  Request JSON:
-  ```json
-  {
-    "text": "string",
-    "include_ner": true
+### `GET /health`
+Response contoh:
+```json
+{
+  "status": "ok",
+  "model_source": "hub",
+  "model_id": "fjrmhri/Deteksi_Hoax_TA",
+  "num_labels": 2,
+  "id2label": {"0": "Fakta", "1": "Hoaks"},
+  "label2id": {"Fakta": 0, "Hoaks": 1},
+  "startup_sanity": {
+    "checked": true,
+    "status": "ok",
+    "message": "startup sanity: kedua kelas muncul pada sampel processed test."
   }
-  ```
-  Opsi tambahan (opsional):
-  ```json
-  {
-    "confidence_orange_threshold": 0.7
-  }
-  ```
+}
+```
 
-  Response JSON deterministik:
-  ```json
-  {
-    "model": {
-      "source": "hub",
-      "model_id": "fjrmhri/Deteksi_Hoax_TA",
-      "max_length": 256
-    },
-    "summary": {
-      "num_paragraphs": 1,
-      "num_sentences": 3,
-      "hoax_sentences": 1,
-      "fakta_sentences": 2,
-      "low_conf_sentences": 0
-    },
-    "paragraphs": [
-      {
-        "paragraph_index": 0,
-        "sentences": [
-          {
-            "sentence_index": 0,
-            "text": "...",
-            "label": "Hoaks",
-            "prob_hoax": 0.97,
-            "prob_fakta": 0.03,
-            "confidence": 0.97,
-            "color": "red"
-          }
-        ],
-        "paragraph_summary": {
-          "hoax_sentences": 1,
-          "fakta_sentences": 0,
-          "avg_confidence": 0.97,
-          "max_hoax_prob": 0.97
-        }
-      }
-    ],
-    "ner": {
-      "enabled": true,
-      "model_id": "cahya/bert-base-indonesian-NER",
-      "entities": [
-        {
-          "text": "Anies Baswedan",
-          "entity_group": "PER",
-          "score": 0.99
-        }
-      ]
-    }
-  }
-  ```
+### `POST /analyze`
+Request:
+```json
+{
+  "text": "string",
+  "include_ner": true
+}
+```
 
-## Aturan Warna
+Response utama:
+- `paragraphs[].sentences[]` berisi:
+  - `label`
+  - `prob_hoax`
+  - `prob_fakta`
+  - `confidence`
+  - `color`
 
-- `orange` jika `confidence < confidence_orange_threshold`
-- selain itu `red` jika label `Hoaks`
-- selain itu `green`
+Warna:
+- `orange` jika `confidence < 0.65` (server-side default)
+- `red` jika `label = Hoaks`
+- `green` selain itu
 
-Jika client tidak mengirim `confidence_orange_threshold`, backend memakai default server-side dari `ORANGE_THRESHOLD` (default `0.65`).
+## Model loading
 
-## Environment Variables
+Urutan load model:
+1. Hub: `MODEL_ID` (default `fjrmhri/Deteksi_Hoax_TA`)
+2. Fallback lokal: `indobert_hoax_ner_model_final/`
 
-- `HF_TOKEN` (opsional): token Hugging Face untuk rate limit/auth.
-- `MODEL_ID` (default: `fjrmhri/Deteksi_Hoax_TA`)
-- `NER_MODEL_ID` (default: `cahya/bert-base-indonesian-NER`)
-- `FRONTEND_ORIGIN` (opsional): jika diisi, CORS dibatasi ke origin ini.
-- `ORANGE_THRESHOLD` (default: `0.65`)
-- `MAX_LENGTH` (default: `256`)
-- `MAX_INPUT_CHARS` (default: `50000`)
-- `BATCH_SIZE` (default: `16`)
-- `LOCAL_MODEL_PATH` (opsional): override path fallback lokal.
+Saat startup backend akan log:
+- model source (`hub/local`)
+- `num_labels`
+- `id2label` / `label2id`
 
-## Model Loading
+## Startup sanity test
 
-1. Coba load dari Hugging Face Hub (`MODEL_ID`) dengan `use_safetensors=True`.
-2. Jika gagal, fallback ke lokal:
-   - default path: `../indobert_hoax_ner_model_final/`
-   - source response akan menjadi `"local"`.
+Saat startup backend mencoba baca:
+- `data/processed/test.csv` (override via `PROCESSED_TEST_PATH`)
 
-Mapping label dipatok eksplisit:
-- `0 -> Fakta`
-- `1 -> Hoaks`
+Backend menguji 2 sampel kecil untuk memastikan prediksi tidak hanya satu kelas.
+Jika kolaps satu kelas, backend tetap hidup tapi mengembalikan `startup_sanity.status = warning`.
 
-## Jalankan Lokal
+## Environment variables
+
+- `HF_TOKEN` (opsional)
+- `MODEL_ID` (default `fjrmhri/Deteksi_Hoax_TA`)
+- `NER_MODEL_ID` (default `cahya/bert-base-indonesian-NER`)
+- `LOCAL_MODEL_PATH` (opsional path fallback lokal)
+- `PROCESSED_TEST_PATH` (opsional path sanity test)
+- `FRONTEND_ORIGIN` (opsional CORS)
+- `ORANGE_THRESHOLD` (default `0.65`)
+- `MAX_LENGTH` (default `256`)
+- `MAX_INPUT_CHARS` (default `50000`)
+- `BATCH_SIZE` (default `16`)
+
+## Run local
 
 ```bash
 cd backend
 python -m venv .venv
-. .venv/Scripts/activate  # Windows PowerShell: .venv\Scripts\Activate.ps1
+.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 uvicorn app:app --host 0.0.0.0 --port 7860
 ```
@@ -122,7 +98,5 @@ docker build -t hoax-backend .
 docker run --rm -p 7860:7860 hoax-backend
 ```
 
-Untuk Hugging Face Spaces Docker:
-- gunakan `backend/Dockerfile`
-- expose port `7860`
-- set secret `HF_TOKEN` bila diperlukan.
+`Dockerfile` sudah expose `7860` dan menjalankan:
+`uvicorn app:app --host 0.0.0.0 --port 7860`

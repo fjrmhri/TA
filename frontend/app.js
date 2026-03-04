@@ -1,7 +1,16 @@
-const BACKEND_ANALYZE_URL_DEV = "http://127.0.0.1:7860/analyze";
-const BACKEND_ANALYZE_URL_PROD = "https://fjrmhri-space-deteksi-hoax-ta.hf.space/analyze";
-const IS_LOCAL = ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
-const ANALYZE_ENDPOINT = IS_LOCAL ? BACKEND_ANALYZE_URL_DEV : BACKEND_ANALYZE_URL_PROD;
+const API_BASE_URL = "https://fjrmhri-space-deteksi-hoax-ta.hf.space";
+
+function resolveApiBaseUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const override = params.get("api");
+  if (override && override.trim()) {
+    return override.trim().replace(/\/+$/, "");
+  }
+  return API_BASE_URL.replace(/\/+$/, "");
+}
+
+const API_BASE = resolveApiBaseUrl();
+const ANALYZE_ENDPOINT = `${API_BASE}/analyze`;
 
 const analyzeForm = document.getElementById("analyzeForm");
 const inputText = document.getElementById("inputText");
@@ -77,19 +86,21 @@ function renderSummary(summary) {
 
 function renderHighlights(paragraphs) {
   const blocks = paragraphs
-    .map((p) => {
-      const spans = p.sentences
+    .map((paragraph) => {
+      const spans = paragraph.sentences
         .map(
-          (s) =>
-            `<span class="hl ${escapeHtml(s.color)}" title="${escapeHtml(
-              `${s.label} | conf ${pct(s.confidence)} | Hoaks ${pct(s.prob_hoax)} | Fakta ${pct(s.prob_fakta)}`
-            )}">${escapeHtml(s.text)}</span>`
+          (sentence) =>
+            `<span class="hl ${escapeHtml(sentence.color)}" title="${escapeHtml(
+              `${sentence.label} | conf ${pct(sentence.confidence)} | Hoaks ${pct(sentence.prob_hoax)} | Fakta ${pct(
+                sentence.prob_fakta
+              )}`
+            )}">${escapeHtml(sentence.text)}</span>`
         )
         .join(" ");
 
       return `
         <article class="paragraph-block">
-          <p class="paragraph-title">Paragraf ${p.paragraph_index + 1}</p>
+          <p class="paragraph-title">Paragraf ${paragraph.paragraph_index + 1}</p>
           <p class="paragraph-text">${spans || "<em>(Tidak ada kalimat terdeteksi)</em>"}</p>
         </article>
       `;
@@ -102,28 +113,28 @@ function renderHighlights(paragraphs) {
 
 function renderConfidence(paragraphs) {
   const html = paragraphs
-    .map((p) => {
-      const items = p.sentences
+    .map((paragraph) => {
+      const items = paragraph.sentences
         .map(
-          (s) => `
+          (sentence) => `
           <div class="confidence-item">
             <div class="conf-left">
-              <strong>[${escapeHtml(s.label)}]</strong> ${escapeHtml(s.text)}
+              <strong>[${escapeHtml(sentence.label)}]</strong> ${escapeHtml(sentence.text)}
             </div>
-            <div class="conf-right">${pct(s.confidence)}</div>
+            <div class="conf-right">${pct(sentence.confidence)}</div>
           </div>
         `
         )
         .join("");
 
-      const ps = p.paragraph_summary || {};
+      const summary = paragraph.paragraph_summary || {};
       return `
         <section class="confidence-block">
-          <h3>Paragraf ${p.paragraph_index + 1}</h3>
+          <h3>Paragraf ${paragraph.paragraph_index + 1}</h3>
           ${items || "<p><em>(Tidak ada kalimat terdeteksi)</em></p>"}
-          <p><small>Hoaks: ${ps.hoax_sentences ?? 0} | Fakta: ${ps.fakta_sentences ?? 0} | Avg conf: ${pct(
-            ps.avg_confidence ?? 0
-          )} | Max hoaks prob: ${pct(ps.max_hoax_prob ?? 0)}</small></p>
+          <p><small>Hoaks: ${summary.hoax_sentences ?? 0} | Fakta: ${summary.fakta_sentences ?? 0} | Avg conf: ${pct(
+            summary.avg_confidence ?? 0
+          )} | Max hoaks prob: ${pct(summary.max_hoax_prob ?? 0)}</small></p>
         </section>
       `;
     })
@@ -149,11 +160,11 @@ function renderNer(ner) {
 
   const html = entities
     .map(
-      (ent) => `
+      (entity) => `
       <article class="entity-card">
-        <span class="entity-type">${escapeHtml(ent.entity_group)}</span>
-        <span class="entity-text">${escapeHtml(ent.text)}</span>
-        <span class="entity-score">Score: ${pct(ent.score)}</span>
+        <span class="entity-type">${escapeHtml(entity.entity_group)}</span>
+        <span class="entity-text">${escapeHtml(entity.text)}</span>
+        <span class="entity-score">Score: ${pct(entity.score)}</span>
       </article>
     `
     )
@@ -171,17 +182,17 @@ function formatCopyText(data) {
   );
   lines.push("");
 
-  for (const p of data.paragraphs) {
-    lines.push(`Paragraf ${p.paragraph_index + 1}`);
-    for (const s of p.sentences) {
-      lines.push(`- [${s.label}] conf=${pct(s.confidence)} :: ${s.text}`);
+  for (const paragraph of data.paragraphs) {
+    lines.push(`Paragraf ${paragraph.paragraph_index + 1}`);
+    for (const sentence of paragraph.sentences) {
+      lines.push(`- [${sentence.label}] conf=${pct(sentence.confidence)} :: ${sentence.text}`);
     }
     lines.push("");
   }
 
   lines.push(`NER enabled: ${data.ner.enabled}`);
-  for (const ent of data.ner.entities) {
-    lines.push(`- ${ent.entity_group}: ${ent.text} (${pct(ent.score)})`);
+  for (const entity of data.ner.entities) {
+    lines.push(`- ${entity.entity_group}: ${entity.text} (${pct(entity.score)})`);
   }
   return lines.join("\n");
 }
@@ -219,8 +230,8 @@ analyzeForm.addEventListener("submit", async (event) => {
     renderHighlights(payload.paragraphs || []);
     renderConfidence(payload.paragraphs || []);
     renderNer(payload.ner || { enabled: false, entities: [] });
-  } catch (err) {
-    showError(`Gagal memproses: ${err.message}`);
+  } catch (error) {
+    showError(`Gagal memproses: ${error.message}`);
   } finally {
     setLoading(false);
   }
@@ -237,12 +248,12 @@ copyBtn.addEventListener("click", async () => {
     showError("Belum ada hasil untuk disalin.");
     return;
   }
+
   clearError();
-  const text = formatCopyText(latestResponse);
   try {
-    await navigator.clipboard.writeText(text);
-    alert("Hasil berhasil disalin.");
-  } catch (err) {
-    showError(`Gagal menyalin hasil: ${err.message}`);
+    await navigator.clipboard.writeText(formatCopyText(latestResponse));
+    window.alert("Hasil berhasil disalin.");
+  } catch (error) {
+    showError(`Gagal menyalin hasil: ${error.message}`);
   }
 });

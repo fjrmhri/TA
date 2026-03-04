@@ -1,0 +1,39 @@
+{
+  "test_csv": "D:\\TA\\code\\Berita_Hoax\\data\\processed\\test.csv",
+  "rows": 7004,
+  "model_source": "hub",
+  "model_id": "fjrmhri/Deteksi_Hoax_TA",
+  "num_labels": 2,
+  "id2label": {
+    "0": "LABEL_0",
+    "1": "LABEL_1"
+  },
+  "label2id": {
+    "LABEL_0": 0,
+    "LABEL_1": 1
+  },
+  "metrics": {
+    "accuracy": 0.740005711022273,
+    "f1_macro": 0.4252892426355953,
+    "precision_macro": 0.3700028555111365,
+    "recall_macro": 0.5,
+    "f1_macro_dup": 0.4252892426355953,
+    "precision_weighted": 0.5476084523455798,
+    "recall_weighted": 0.740005711022273,
+    "f1_weighted": 0.6294329367733553,
+    "confusion_matrix": [
+      [
+        5183,
+        0
+      ],
+      [
+        1821,
+        0
+      ]
+    ],
+    "tn": 5183,
+    "fp": 0,
+    "fn": 1821,
+    "tp": 0
+  }
+}
