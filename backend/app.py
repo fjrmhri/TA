@@ -344,6 +344,19 @@ def startup_event() -> None:
     _run_startup_sanity()
 
 
+@app.get("/")
+def root() -> Dict[str, object]:
+    return {
+        "status": "ok",
+        "message": "Hoax backend is running.",
+        "endpoints": {
+            "health": "/health",
+            "analyze": "/analyze (POST)",
+            "docs": "/docs",
+        },
+    }
+
+
 @app.get("/health")
 def health() -> Dict[str, object]:
     return {
