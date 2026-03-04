@@ -77,7 +77,7 @@ Fallback jika syarat prioritas tidak terpenuhi:
 Alasan keputusan representasi text:
 - `summary` tersedia pada seluruh file dan relatif ringkas dibanding `isi_berita/Narasi`
 - Strategi `judul+summary` stabil untuk klasifikasi dan menekan risiko truncation/OOM
-- Penggunaan aktual strategi: `judul_summary = 36.740` baris (99,51%), fallback = `180` baris
+- Penggunaan aktual strategi: `judul_summary = 36.764` baris (99,46%), fallback = `201` baris
 
 Pembersihan minimal:
 - Normalisasi whitespace (`\s+ -> satu spasi`)
@@ -85,10 +85,14 @@ Pembersihan minimal:
 
 Split dataset:
 - Stratified split 70/15/15 (`random_state=42`)
-- Komposisi:
+- Komposisi sebelum augmentasi:
   - Train: 25.844
   - Validasi: 5.538
   - Uji: 5.538
+- Komposisi train sesudah augmentasi train-only:
+  - Train: 34.438
+  - Validasi: 5.538 (tetap)
+  - Uji: 5.538 (tetap)
 - Distribusi train sebelum augmentasi:
   - `0: 17.219`
   - `1: 8.625`
