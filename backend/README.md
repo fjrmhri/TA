@@ -12,8 +12,13 @@ Backend ini menyediakan analisis deteksi hoaks per kalimat + NER opsional untuk 
   ```json
   {
     "text": "string",
-    "include_ner": true,
-    "confidence_orange_threshold": 0.65
+    "include_ner": true
+  }
+  ```
+  Opsi tambahan (opsional):
+  ```json
+  {
+    "confidence_orange_threshold": 0.7
   }
   ```
 
@@ -73,6 +78,8 @@ Backend ini menyediakan analisis deteksi hoaks per kalimat + NER opsional untuk 
 - `orange` jika `confidence < confidence_orange_threshold`
 - selain itu `red` jika label `Hoaks`
 - selain itu `green`
+
+Jika client tidak mengirim `confidence_orange_threshold`, backend memakai default server-side dari `ORANGE_THRESHOLD` (default `0.65`).
 
 ## Environment Variables
 

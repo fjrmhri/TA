@@ -158,6 +158,16 @@ def _pick_color(label: str, confidence: float, orange_threshold: float) -> str:
     return "green"
 
 
+def _resolve_orange_threshold(requested_threshold: Optional[float]) -> float:
+    threshold = ORANGE_THRESHOLD if requested_threshold is None else requested_threshold
+    if not (0.0 <= threshold <= 1.0):
+        raise HTTPException(
+            status_code=400,
+            detail="confidence_orange_threshold harus berada pada rentang 0 sampai 1.",
+        )
+    return float(threshold)
+
+
 def _classify_sentences(sentences: List[str], orange_threshold: float) -> List[Dict]:
     if not sentences:
         return []
@@ -251,16 +261,7 @@ def analyze(payload: AnalyzeRequest) -> Dict:
             detail=f"Input terlalu panjang ({len(text)} chars). Maksimum {MAX_INPUT_CHARS} chars.",
         )
 
-    threshold = (
-        ORANGE_THRESHOLD
-        if payload.confidence_orange_threshold is None
-        else payload.confidence_orange_threshold
-    )
-    if not (0.0 <= threshold <= 1.0):
-        raise HTTPException(
-            status_code=400,
-            detail="confidence_orange_threshold harus berada pada rentang 0 sampai 1.",
-        )
+    threshold = _resolve_orange_threshold(payload.confidence_orange_threshold)
 
     paragraphs_raw = _split_paragraphs(text)
     paragraph_responses = []
