@@ -1,4 +1,4 @@
-const BACKEND_URL = "http://127.0.0.1:7860";
+const BACKEND_URL = "https://fjrmhri-Space_Deteksi_Hoax_TA.hf.space";
 
 const analyzeForm = document.getElementById("analyzeForm");
 const inputText = document.getElementById("inputText");
