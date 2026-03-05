@@ -164,6 +164,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     result = {
         "test_csv": str(test_csv),
         "rows": int(len(df)),
+        "artifact_validation_mode": runtime.artifact_validation_mode,
         "model_source": runtime.model_source,
         "model_id": runtime.model_id,
         "num_labels": runtime.num_labels,
@@ -173,6 +174,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         "label2id": runtime.label2id,
         "hoax_threshold": float(runtime.hoax_threshold),
         "calibration_loaded": bool(runtime.calibration_loaded),
+        "missing_required_artifacts": runtime.missing_required_artifacts,
+        "missing_optional_artifacts": runtime.missing_optional_artifacts,
+        # Backward-compatible alias.
+        "missing_local_artifacts": runtime.missing_local_artifacts,
         "raw_pred_id_distribution": pd.Series(raw_pred_ids).value_counts().sort_index().to_dict(),
         "pred_distribution": {str(k): int(v) for k, v in pred_dist.items()},
         "challenge_ready": challenge_ready,
@@ -205,6 +210,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         f"[evaluate_model] hoax_precision={hoax_precision:.6f} hoax_recall={hoax_recall:.6f} "
         f"challenge_ready={challenge_ready}"
     )
+    print(f"[evaluate_model] model_source={runtime.model_source} artifact_validation_mode={runtime.artifact_validation_mode}")
+    if runtime.missing_required_artifacts:
+        print(f"[evaluate_model] missing_required_artifacts={runtime.missing_required_artifacts}")
+    if runtime.missing_optional_artifacts:
+        print(f"[evaluate_model] missing_optional_artifacts={runtime.missing_optional_artifacts}")
     print(f"[evaluate_model] confusion_matrix={cm.tolist()}")
     print(f"[evaluate_model] metrics written: {output_json}")
     return 0

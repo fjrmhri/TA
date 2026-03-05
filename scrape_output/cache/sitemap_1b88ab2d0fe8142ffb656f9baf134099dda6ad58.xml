@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+                          <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+                                  xmlns:news="http://www.google.com/schemas/sitemap-news/0.9">
+                    <url>
+                  <loc>
+                      <![CDATA[https://www.detik.com/properti/berita-rumah/d-7264499/cluster-galveston-citragran-cibubur]]>
+                  </loc>
+                  <news:news>
+                      <news:publication>
+                          <news:name>detikProperti</news:name>
+                          <news:language>id</news:language>
+                      </news:publication>
+                      <news:publication_date>2024-03-27T15:21:00+00:00</news:publication_date>
+                            <news:title><![CDATA[Cluster Galveston - CitraGran Cibubur]]></news:title>
+                      <news:keywords><![CDATA[rumah dijual,listing properti]]></news:keywords>
+                  </news:news>
+                    </url>
+                
+                    <url>
+                  <loc>
+                      <![CDATA[https://www.detik.com/properti/berita-ruko/d-7242692/ruko-prospektif-neo-promenade-di-parkland-podomoro-karawang]]>
+                  </loc>
+                  <news:news>
+                      <news:publication>
+                          <news:name>detikProperti</news:name>
+                          <news:language>id</news:language>
+                      </news:publication>
+                      <news:publication_date>2024-03-15T10:20:00+00:00</news:publication_date>
+                            <news:title><![CDATA[Ruko Prospektif Neo Promenade di Parkland Podomoro Karawang]]></news:title>
+                      <news:keywords><![CDATA[ruko,ruko dijual]]></news:keywords>
+                  </news:news>
+                    </url>
+                </urlset>

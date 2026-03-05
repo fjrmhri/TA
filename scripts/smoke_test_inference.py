@@ -302,6 +302,11 @@ def run_challenge(runtime: InferenceRuntime, output_path: Path, min_correct: int
         "min_correct_target": int(min_correct),
         "pass_min_correct": bool(correct >= min_correct),
         "collapsed_one_class": bool(collapsed),
+        "artifact_validation_mode": runtime.artifact_validation_mode,
+        "model_source": runtime.model_source,
+        "calibration_loaded": bool(runtime.calibration_loaded),
+        "missing_required_artifacts": runtime.missing_required_artifacts,
+        "missing_optional_artifacts": runtime.missing_optional_artifacts,
         "hoax_threshold": float(runtime.hoax_threshold),
         "pred_distribution": {str(k): int(v) for k, v in pred_dist.items()},
         "expected_distribution": {str(k): int(v) for k, v in expected_dist.items()},
@@ -375,8 +380,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(
         f"[smoke] model_source={runtime.model_source} "
         f"hoax_threshold={runtime.hoax_threshold:.4f} "
-        f"calibration_loaded={runtime.calibration_loaded}"
+        f"calibration_loaded={runtime.calibration_loaded} "
+        f"artifact_validation_mode={runtime.artifact_validation_mode}"
     )
+    if runtime.missing_required_artifacts:
+        print(f"[smoke] missing_required_artifacts={runtime.missing_required_artifacts}")
+    if runtime.missing_optional_artifacts:
+        print(f"[smoke] missing_optional_artifacts={runtime.missing_optional_artifacts}")
     print("[smoke] contoh 3 prediksi:")
     for idx, (row, pred) in enumerate(zip(df_sample.itertuples(index=False), preds)):
         if idx >= 3:
@@ -419,6 +429,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "Periksa kualitas dataset dan threshold calibration."
             )
             return 3
+        if not challenge["pass_min_correct"]:
+            print(
+                "[smoke] ERROR: challenge 6 berita belum memenuhi gate min_correct. "
+                f"correct={challenge['correct']} target={challenge['min_correct_target']}"
+            )
+            return 4
 
     print("[smoke] PASS: prediksi tidak kolaps ke satu kelas.")
     return 0

@@ -1,2 +1,5 @@
-*.csv
+data_hoaks_turnbackhoaks.csv
+data_nonhoaks_cnn.csv
+data_nonhoaks_detik.csv
+data_nonhoaks_kompas.csv
 indobert_hoax_ner_model_final/

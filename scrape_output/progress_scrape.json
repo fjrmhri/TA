@@ -1,0 +1,37 @@
+{
+  "sumber": {
+    "turnbackhoaks": {
+      "discovery_state": {
+        "page": 1466
+      },
+      "meta": {
+        "last_run": 1771499657.2791307,
+        "last_total_urls": 14656
+      }
+    },
+    "cnn": {
+      "meta": {
+        "last_run": 1771500266.8226457,
+        "last_total_urls": 1004
+      }
+    },
+    "detik": {
+      "meta": {
+        "last_run": 1771512460.8010705,
+        "last_total_urls": 24479
+      }
+    },
+    "kompas": {
+      "meta": {
+        "last_run": 1771514328.109211,
+        "last_total_urls": 5138
+      }
+    }
+  },
+  "restricted_urls": [],
+  "gagal_scrape": [],
+  "meta": {
+    "created_at": 1771489454.3955827,
+    "version": 11
+  }
+}

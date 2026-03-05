@@ -1,0 +1,17 @@
+2026-02-19 14:45:16,591 | INFO | Mulai v11. output_dir=d:\scraping\scrape_output
+2026-02-19 14:49:36,577 | INFO | Mulai v11. output_dir=d:\scraping\scrape_output
+2026-02-19 14:52:51,844 | INFO | Mulai v11. output_dir=d:\scraping\scrape_output
+2026-02-19 14:52:55,753 | WARNING | Discovery CNN gagal pada https://www.cnnindonesia.com/sitemap.xml: 'RobotsManager' object has no attribute 'can_fetch'
+2026-02-19 14:54:56,550 | INFO | Mulai v11. output_dir=d:\scraping\scrape_output
+2026-02-19 14:54:59,836 | WARNING | Discovery CNN gagal pada https://www.cnnindonesia.com/sitemap.xml: 'RobotsManager' object has no attribute 'can_fetch'
+2026-02-19 15:04:55,704 | INFO | Mulai v11. output_dir=d:\scraping\scrape_output
+2026-02-19 15:24:14,380 | INFO | Mulai v11. output_dir=d:\scraping\scrape_output
+2026-02-19 16:52:28,404 | INFO | [turnbackhoaks] Mulai scrape: 14656 URL
+2026-02-19 18:14:17,280 | INFO | [turnbackhoaks] Selesai. Output: d:\scraping\scrape_output\data_hoaks_turnbackhoaks.csv
+2026-02-19 18:14:17,327 | INFO | [cnn] Mulai scrape: 1004 URL
+2026-02-19 18:24:26,823 | INFO | [cnn] Selesai. Output: d:\scraping\scrape_output\data_nonhoaks_cnn.csv
+2026-02-19 18:24:26,869 | INFO | [detik] Mulai scrape: 24479 URL
+2026-02-19 21:47:40,802 | INFO | [detik] Selesai. Output: d:\scraping\scrape_output\data_nonhoaks_detik.csv
+2026-02-19 21:47:40,991 | INFO | [kompas] Mulai scrape: 5138 URL
+2026-02-19 22:18:48,110 | INFO | [kompas] Selesai. Output: d:\scraping\scrape_output\data_nonhoaks_kompas.csv
+2026-02-19 22:19:02,631 | INFO | Gabungan selesai: d:\scraping\scrape_output\dataset_final_gabungan.csv

@@ -1,7 +1,8 @@
 {
   "test_csv": "D:\\TA\\code\\Berita_Hoax\\data\\processed\\test.csv",
   "rows": 8630,
-  "model_source": "hub",
+  "artifact_validation_mode": "functional",
+  "model_source": "local",
   "model_id": "fjrmhri/Deteksi_Hoax_TA",
   "num_labels": 2,
   "fakta_class_id": 0,
@@ -14,45 +15,51 @@
     "Fakta": 0,
     "Hoaks": 1
   },
-  "hoax_threshold": 0.5,
-  "calibration_loaded": false,
+  "hoax_threshold": 0.3,
+  "calibration_loaded": true,
+  "missing_required_artifacts": [],
+  "missing_optional_artifacts": [
+    "D:\\TA\\code\\Berita_Hoax\\indobert_hoax_ner_model_final\\special_tokens_map.json",
+    "D:\\TA\\code\\Berita_Hoax\\indobert_hoax_ner_model_final\\vocab.txt"
+  ],
+  "missing_local_artifacts": [],
   "raw_pred_id_distribution": {
-    "0": 7076,
-    "1": 1554
+    "0": 5165,
+    "1": 3465
   },
   "pred_distribution": {
-    "0": 7076,
-    "1": 1554
+    "0": 5165,
+    "1": 3465
   },
   "challenge_ready": true,
   "metrics": {
-    "accuracy": 0.7769409038238703,
-    "f1_macro": 0.7300429417419416,
-    "precision_macro": 0.8639768230638779,
-    "recall_macro": 0.7233400402414487,
-    "f1_macro_dup": 0.7300429417419416,
-    "precision_weighted": 0.8376233176366246,
-    "recall_weighted": 0.7769409038238703,
-    "f1_weighted": 0.7518426060736026,
-    "fakta_precision": 0.7279536461277558,
-    "fakta_recall": 1.0,
-    "fakta_f1": 0.8425615441236608,
-    "hoax_precision": 1.0,
-    "hoax_recall": 0.44668008048289737,
-    "hoax_f1": 0.6175243393602226,
+    "accuracy": 0.9969872537659328,
+    "f1_macro": 0.9968677018206249,
+    "precision_macro": 0.9971980907121275,
+    "recall_macro": 0.9965431996254086,
+    "f1_macro_dup": 0.9968677018206249,
+    "precision_weighted": 0.9969907263744584,
+    "recall_weighted": 0.9969872537659328,
+    "f1_weighted": 0.9969862610451532,
+    "fakta_precision": 0.9961277831558567,
+    "fakta_recall": 0.9988351776354106,
+    "fakta_f1": 0.9974796432725863,
+    "hoax_precision": 0.9982683982683983,
+    "hoax_recall": 0.9942512216154067,
+    "hoax_f1": 0.9962557603686636,
     "confusion_matrix": [
       [
-        5151,
-        0
+        5145,
+        6
       ],
       [
-        1925,
-        1554
+        20,
+        3459
       ]
     ],
-    "tn": 5151,
-    "fp": 0,
-    "fn": 1925,
-    "tp": 1554
+    "tn": 5145,
+    "fp": 6,
+    "fn": 20,
+    "tp": 3459
   }
 }

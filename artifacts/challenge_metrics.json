@@ -5,6 +5,14 @@
   "min_correct_target": 5,
   "pass_min_correct": true,
   "collapsed_one_class": false,
+  "artifact_validation_mode": "functional",
+  "model_source": "local",
+  "calibration_loaded": true,
+  "missing_required_artifacts": [],
+  "missing_optional_artifacts": [
+    "D:\\TA\\code\\Berita_Hoax\\indobert_hoax_ner_model_final\\special_tokens_map.json",
+    "D:\\TA\\code\\Berita_Hoax\\indobert_hoax_ner_model_final\\vocab.txt"
+  ],
   "hoax_threshold": 0.3,
   "pred_distribution": {
     "0": 4,

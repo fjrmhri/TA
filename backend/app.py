@@ -41,6 +41,11 @@ PARAGRAPH_SPLIT_RE = re.compile(r"(?:\r?\n){2,}")
 SENTENCE_RE = re.compile(r"[^.!?]+(?:[.!?]+(?:[\"”’)\]]+)?)|[^.!?]+$")
 HOAX_LABEL_TOKENS = ("hoaks", "hoax", "fake", "false", "disinfo", "misinfo")
 FAKTA_LABEL_TOKENS = ("fakta", "fact", "true", "valid", "nonhoax", "non-hoax")
+NER_LABEL_ID_MAP = {
+    "PER": "Orang",
+    "ORG": "Organisasi",
+    "LOC": "Lokasi",
+}
 INFERENCE_CLEAN_PATTERNS = [
     (re.compile(r"(?i)\buncategorized\b"), " "),
     (re.compile(r"(?i)\b(?:facebook|twitter|x\.com|tiktok|youtube|instagram|whatsapp)\b"), " "),
@@ -57,6 +62,18 @@ INFERENCE_CLEAN_PATTERNS = [
     (re.compile(r"(?i)\b\d{1,2}\s+\d{1,2}\s+\d{4}\b"), " "),
     (re.compile(r"(?i)\b\d{1,2}:\d{2}\s*wib\b"), " "),
 ]
+REQUIRED_LOCAL_MODEL_FILES = [
+    "config.json",
+    "tokenizer.json",
+    "tokenizer_config.json",
+    "challenge_eval.json",
+]
+OPTIONAL_LOCAL_MODEL_FILES = [
+    "special_tokens_map.json",
+    "vocab.txt",
+]
+WEIGHT_CANDIDATES = ("model.safetensors", "pytorch_model.bin")
+ARTIFACT_VALIDATION_MODE = "functional"
 
 
 class AnalyzeRequest(BaseModel):
@@ -91,6 +108,11 @@ FAKTA_CLASS_ID = 0
 HOAX_CLASS_ID = 1
 HOAX_THRESHOLD = DEFAULT_HOAX_THRESHOLD
 CALIBRATION_LOADED = False
+LOCAL_MODEL_VALID = False
+MISSING_REQUIRED_LOCAL_ARTIFACTS: List[str] = []
+MISSING_OPTIONAL_LOCAL_ARTIFACTS: List[str] = []
+# Backward-compatible alias.
+MISSING_LOCAL_ARTIFACTS: List[str] = []
 STARTUP_SANITY: Dict[str, object] = {
     "checked": False,
     "status": "not_run",
@@ -119,6 +141,155 @@ def _normalize_label(name: str) -> str:
     return re.sub(r"[^a-z0-9\-]+", "", str(name).strip().lower())
 
 
+def _to_label_id_id(tag: str) -> str:
+    normalized = str(tag).strip().upper()
+    return NER_LABEL_ID_MAP.get(normalized, f"Label asli model: {normalized}")
+
+
+def _normalize_entity_text(text: str) -> str:
+    normalized = re.sub(r"\s+", " ", str(text)).strip()
+    if normalized.startswith("##"):
+        normalized = normalized[2:]
+    normalized = normalized.replace(" ##", "")
+    return normalized.strip()
+
+
+def _resolve_entity_span(sentence_text: str, entity_text: str, start, end) -> tuple[int, int] | None:
+    sentence = str(sentence_text)
+    ent_text = str(entity_text)
+    n = len(sentence)
+
+    try:
+        start_i = int(start)
+        end_i = int(end)
+    except Exception:
+        start_i = -1
+        end_i = -1
+
+    if 0 <= start_i < end_i <= n:
+        return start_i, end_i
+
+    if not ent_text:
+        return None
+
+    lowered_sentence = sentence.lower()
+    lowered_entity = ent_text.lower()
+    idx = lowered_sentence.find(lowered_entity)
+    if idx < 0:
+        return None
+
+    return idx, idx + len(ent_text)
+
+
+def _extract_entities_for_sentences(sentences: List[str]) -> List[List[Dict]]:
+    if not sentences:
+        return []
+
+    try:
+        ner = _get_ner_pipeline()
+        raw_output = ner(sentences)
+    except Exception as exc:
+        raise RuntimeError(f"Gagal menjalankan NER per kalimat: {exc}") from exc
+
+    per_sentence_raw: List[List[Dict]] = [[] for _ in sentences]
+    if len(sentences) == 1:
+        if isinstance(raw_output, list):
+            if raw_output and isinstance(raw_output[0], list):
+                per_sentence_raw[0] = raw_output[0]
+            elif raw_output and isinstance(raw_output[0], dict):
+                per_sentence_raw[0] = raw_output
+    elif isinstance(raw_output, list) and len(raw_output) == len(sentences):
+        for idx, entry in enumerate(raw_output):
+            if isinstance(entry, list):
+                per_sentence_raw[idx] = entry
+            elif isinstance(entry, dict):
+                per_sentence_raw[idx] = [entry]
+
+    formatted: List[List[Dict]] = []
+    for sentence_text, sentence_entities in zip(sentences, per_sentence_raw):
+        sentence_result: List[Dict] = []
+        seen = set()
+        for entity in sentence_entities:
+            ent_group = str(entity.get("entity_group", entity.get("entity", ""))).strip().upper()
+            ent_label_id = str(entity.get("entity", ent_group)).strip() or ent_group
+            ent_text = _normalize_entity_text(entity.get("word", entity.get("text", "")))
+            if not ent_group or not ent_text:
+                continue
+
+            span = _resolve_entity_span(
+                sentence_text=sentence_text,
+                entity_text=ent_text,
+                start=entity.get("start"),
+                end=entity.get("end"),
+            )
+            if span is None:
+                continue
+
+            start_i, end_i = span
+            if not (0 <= start_i < end_i <= len(sentence_text)):
+                continue
+
+            text_from_sentence = sentence_text[start_i:end_i]
+            if not text_from_sentence.strip():
+                continue
+
+            dedup_key = (start_i, end_i, ent_group, text_from_sentence.lower())
+            if dedup_key in seen:
+                continue
+            seen.add(dedup_key)
+
+            sentence_result.append(
+                {
+                    "text": text_from_sentence,
+                    "entity_group": ent_group,
+                    "entity_label_id": ent_label_id,
+                    "entity_label_id_id": _to_label_id_id(ent_group),
+                    "score": _float(float(entity.get("score", 0.0))),
+                    "start": int(start_i),
+                    "end": int(end_i),
+                }
+            )
+
+        formatted.append(sentence_result)
+
+    return formatted
+
+
+def _aggregate_ner_entities(all_entities: List[Dict]) -> List[Dict]:
+    merged: Dict[tuple, Dict] = {}
+    for entity in all_entities:
+        text = str(entity.get("text", "")).strip()
+        group = str(entity.get("entity_group", "")).strip().upper()
+        if not text or not group:
+            continue
+
+        key = (text.lower(), group)
+        score = float(entity.get("score", 0.0))
+        label_id_id = str(entity.get("entity_label_id_id", _to_label_id_id(group)))
+        if key not in merged or score > float(merged[key]["score"]):
+            merged[key] = {
+                "text": text,
+                "entity_group": group,
+                "entity_label_id_id": label_id_id,
+                "score": _float(score),
+            }
+
+    return list(merged.values())
+
+
+def _build_ner_label_legend(all_entities: List[Dict]) -> Dict[str, Dict[str, str]]:
+    legend: Dict[str, Dict[str, str]] = {}
+    for entity in all_entities:
+        group = str(entity.get("entity_group", "")).strip().upper()
+        if not group or group in legend:
+            continue
+        legend[group] = {
+            "id": group,
+            "label_id_id": _to_label_id_id(group),
+        }
+    return legend
+
+
 def _normalize_unit_text(text: str) -> str:
     cleaned = str(text)
     for pattern, replacement in INFERENCE_CLEAN_PATTERNS:
@@ -126,6 +297,39 @@ def _normalize_unit_text(text: str) -> str:
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
     cleaned = cleaned.strip(" -:;,.")
     return cleaned
+
+
+def _missing_local_model_artifacts() -> tuple[List[str], List[str]]:
+    missing_required: List[str] = []
+    missing_optional: List[str] = []
+    if not LOCAL_MODEL_PATH.exists():
+        missing_required.append(str(LOCAL_MODEL_PATH))
+        return missing_required, missing_optional
+
+    for rel in REQUIRED_LOCAL_MODEL_FILES:
+        target = LOCAL_MODEL_PATH / rel
+        if not target.exists():
+            missing_required.append(str(target))
+
+    for rel in OPTIONAL_LOCAL_MODEL_FILES:
+        target = LOCAL_MODEL_PATH / rel
+        if not target.exists():
+            missing_optional.append(str(target))
+
+    if not any((LOCAL_MODEL_PATH / w).exists() for w in WEIGHT_CANDIDATES):
+        missing_required.append(" or ".join(str(LOCAL_MODEL_PATH / w) for w in WEIGHT_CANDIDATES))
+
+    if not CALIBRATION_PATH.exists():
+        missing_required.append(str(CALIBRATION_PATH))
+    else:
+        try:
+            payload = json.loads(CALIBRATION_PATH.read_text(encoding="utf-8"))
+            if payload.get("best_threshold", payload.get("threshold")) is None:
+                missing_required.append(f"{CALIBRATION_PATH} (missing best_threshold/threshold)")
+        except Exception as exc:
+            missing_required.append(f"{CALIBRATION_PATH} (invalid json: {exc})")
+
+    return missing_required, missing_optional
 
 
 def _resolve_label_maps(model_config) -> None:
@@ -247,37 +451,65 @@ def _load_calibration() -> None:
 
 
 def _load_classifier() -> None:
-    global CLASSIFIER_MODEL, CLASSIFIER_TOKENIZER, MODEL_SOURCE
+    global CLASSIFIER_MODEL, CLASSIFIER_TOKENIZER, MODEL_SOURCE, LOCAL_MODEL_VALID
+    global MISSING_REQUIRED_LOCAL_ARTIFACTS, MISSING_OPTIONAL_LOCAL_ARTIFACTS, MISSING_LOCAL_ARTIFACTS
 
     auth_kwargs = _hf_auth_kwargs()
-    try:
-        LOGGER.info("Loading classifier from Hub: %s", MODEL_ID)
-        CLASSIFIER_TOKENIZER = AutoTokenizer.from_pretrained(MODEL_ID, **auth_kwargs)
-        CLASSIFIER_MODEL = AutoModelForSequenceClassification.from_pretrained(
-            MODEL_ID,
-            use_safetensors=True,
-            low_cpu_mem_usage=True,
-            **auth_kwargs,
-        )
-        MODEL_SOURCE = "hub"
-    except Exception as hub_exc:
-        LOGGER.warning("Hub load failed: %s", hub_exc)
-        if not LOCAL_MODEL_PATH.exists():
-            raise RuntimeError(
-                f"Model Hub gagal dan fallback lokal tidak ditemukan: {LOCAL_MODEL_PATH}"
-            ) from hub_exc
-        LOGGER.info("Loading classifier from local fallback: %s", LOCAL_MODEL_PATH)
-        CLASSIFIER_TOKENIZER = AutoTokenizer.from_pretrained(
-            str(LOCAL_MODEL_PATH),
-            local_files_only=True,
-        )
-        CLASSIFIER_MODEL = AutoModelForSequenceClassification.from_pretrained(
-            str(LOCAL_MODEL_PATH),
-            local_files_only=True,
-            use_safetensors=True,
-            low_cpu_mem_usage=True,
-        )
-        MODEL_SOURCE = "local"
+    missing_required, missing_optional = _missing_local_model_artifacts()
+    MISSING_REQUIRED_LOCAL_ARTIFACTS = missing_required
+    MISSING_OPTIONAL_LOCAL_ARTIFACTS = missing_optional
+    MISSING_LOCAL_ARTIFACTS = list(missing_required)
+    LOCAL_MODEL_VALID = len(missing_required) == 0
+    local_exc = None
+    hub_exc = None
+
+    if not missing_required:
+        try:
+            LOGGER.info("Loading classifier from local primary: %s", LOCAL_MODEL_PATH)
+            CLASSIFIER_TOKENIZER = AutoTokenizer.from_pretrained(
+                str(LOCAL_MODEL_PATH),
+                local_files_only=True,
+            )
+            CLASSIFIER_MODEL = AutoModelForSequenceClassification.from_pretrained(
+                str(LOCAL_MODEL_PATH),
+                local_files_only=True,
+                use_safetensors=True,
+                low_cpu_mem_usage=True,
+            )
+            MODEL_SOURCE = "local"
+        except Exception as exc:
+            local_exc = exc
+            LOGGER.warning("Local primary load failed: %s", exc)
+            CLASSIFIER_TOKENIZER = None
+            CLASSIFIER_MODEL = None
+    else:
+        LOGGER.warning("Local model required artifacts tidak valid: %s", missing_required)
+    if missing_optional:
+        LOGGER.warning("Local model optional artifacts tidak ditemukan: %s", missing_optional)
+
+    if CLASSIFIER_MODEL is None or CLASSIFIER_TOKENIZER is None:
+        try:
+            LOGGER.info("Loading classifier from Hub fallback: %s", MODEL_ID)
+            CLASSIFIER_TOKENIZER = AutoTokenizer.from_pretrained(MODEL_ID, **auth_kwargs)
+            CLASSIFIER_MODEL = AutoModelForSequenceClassification.from_pretrained(
+                MODEL_ID,
+                use_safetensors=True,
+                low_cpu_mem_usage=True,
+                **auth_kwargs,
+            )
+            MODEL_SOURCE = "hub"
+        except Exception as exc:
+            hub_exc = exc
+
+    if CLASSIFIER_MODEL is None or CLASSIFIER_TOKENIZER is None:
+        detail = []
+        if missing_required:
+            detail.append("missing required local artifacts: " + "; ".join(missing_required))
+        if local_exc is not None:
+            detail.append(f"local load failed: {local_exc}")
+        if hub_exc is not None:
+            detail.append(f"hub load failed: {hub_exc}")
+        raise RuntimeError("Tidak dapat memuat model classifier. " + " | ".join(detail))
 
     CLASSIFIER_MODEL.to(DEVICE)
     CLASSIFIER_MODEL.eval()
@@ -334,33 +566,6 @@ def _split_sentences(paragraph: str) -> List[str]:
         return sentences
     fallback = _normalize_unit_text(normalized)
     return [fallback] if fallback else []
-
-
-def _extract_entities(text: str) -> List[Dict]:
-    try:
-        ner = _get_ner_pipeline()
-        raw_entities = ner(text)
-    except Exception as exc:
-        raise RuntimeError(f"Gagal menjalankan NER: {exc}") from exc
-
-    entities: List[Dict] = []
-    seen = set()
-    for entity in raw_entities:
-        ent_text = str(entity.get("word", "")).strip()
-        ent_group = str(entity.get("entity_group", "")).strip()
-        score = float(entity.get("score", 0.0))
-        key = (ent_text.lower(), ent_group)
-        if not ent_text or not ent_group or key in seen:
-            continue
-        seen.add(key)
-        entities.append(
-            {
-                "text": ent_text,
-                "entity_group": ent_group,
-                "score": _float(score),
-            }
-        )
-    return entities
 
 
 def _run_startup_sanity() -> None:
@@ -454,7 +659,13 @@ def root() -> Dict[str, object]:
 def health() -> Dict[str, object]:
     return {
         "status": "ok",
+        "artifact_validation_mode": ARTIFACT_VALIDATION_MODE,
         "model_source": MODEL_SOURCE,
+        "local_model_valid": bool(LOCAL_MODEL_VALID),
+        "missing_required_artifacts": MISSING_REQUIRED_LOCAL_ARTIFACTS,
+        "missing_optional_artifacts": MISSING_OPTIONAL_LOCAL_ARTIFACTS,
+        # Backward-compatible alias.
+        "missing_local_artifacts": MISSING_LOCAL_ARTIFACTS,
         "model_id": MODEL_ID,
         "num_labels": NUM_LABELS,
         "id2label": {str(k): v for k, v in ID2LABEL.items()},
@@ -487,6 +698,7 @@ def analyze(payload: AnalyzeRequest) -> Dict[str, object]:
     total_hoax = 0
     total_fakta = 0
     total_low_conf = 0
+    all_sentence_ner_entities: List[Dict] = []
 
     for paragraph_idx, paragraph_text in enumerate(paragraphs_raw):
         sentences = _split_sentences(paragraph_text)
@@ -524,6 +736,17 @@ def analyze(payload: AnalyzeRequest) -> Dict[str, object]:
                 }
             )
 
+        if payload.include_ner:
+            sentence_texts = [str(item.get("text", "")) for item in sentence_items]
+            try:
+                paragraph_ner_entities = _extract_entities_for_sentences(sentence_texts)
+            except RuntimeError as exc:
+                raise HTTPException(status_code=503, detail=str(exc)) from exc
+            for sentence_idx, sentence_item in enumerate(sentence_items):
+                ner_entities = paragraph_ner_entities[sentence_idx] if sentence_idx < len(paragraph_ner_entities) else []
+                sentence_item["ner_entities"] = ner_entities
+                all_sentence_ner_entities.extend(ner_entities)
+
         paragraph_summary = {
             "hoax_sentences": paragraph_hoax,
             "fakta_sentences": paragraph_fakta,
@@ -544,11 +767,10 @@ def analyze(payload: AnalyzeRequest) -> Dict[str, object]:
         total_low_conf += paragraph_low
 
     entities: List[Dict] = []
+    label_legend: Dict[str, Dict[str, str]] = {}
     if payload.include_ner:
-        try:
-            entities = _extract_entities(text)
-        except RuntimeError as exc:
-            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        entities = _aggregate_ner_entities(all_sentence_ner_entities)
+        label_legend = _build_ner_label_legend(all_sentence_ner_entities)
 
     return {
         "model": {
@@ -575,5 +797,6 @@ def analyze(payload: AnalyzeRequest) -> Dict[str, object]:
             "enabled": payload.include_ner,
             "model_id": NER_MODEL_ID,
             "entities": entities,
+            "label_legend": label_legend,
         },
     }

@@ -7,7 +7,7 @@ import json
 import os
 import re
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 import torch
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
@@ -34,6 +34,19 @@ INFERENCE_CLEAN_PATTERNS = [
     (re.compile(r"(?i)\b\d{1,2}\s+\d{1,2}\s+\d{4}\b"), " "),
     (re.compile(r"(?i)\b\d{1,2}:\d{2}\s*wib\b"), " "),
 ]
+
+REQUIRED_LOCAL_MODEL_FILES = [
+    "config.json",
+    "tokenizer.json",
+    "tokenizer_config.json",
+    "challenge_eval.json",
+]
+OPTIONAL_LOCAL_MODEL_FILES = [
+    "special_tokens_map.json",
+    "vocab.txt",
+]
+WEIGHT_CANDIDATES = ("model.safetensors", "pytorch_model.bin")
+ARTIFACT_VALIDATION_MODE = "functional"
 
 
 def normalize_unit_text(text: str) -> str:
@@ -91,6 +104,11 @@ class InferenceRuntime:
         self.num_labels = 2
         self.fakta_class_id = 0
         self.hoax_class_id = 1
+        self.artifact_validation_mode = ARTIFACT_VALIDATION_MODE
+        self.missing_required_artifacts: List[str] = []
+        self.missing_optional_artifacts: List[str] = []
+        # Backward-compatible alias used by existing scripts/logs.
+        self.missing_local_artifacts: List[str] = []
 
     def _hf_auth_kwargs(self) -> Dict:
         kwargs: Dict = {}
@@ -148,38 +166,96 @@ class InferenceRuntime:
         except Exception:
             self.calibration_loaded = False
 
+    def _validate_local_artifacts(self) -> Tuple[List[str], List[str]]:
+        missing_required: List[str] = []
+        missing_optional: List[str] = []
+        if not self.local_model_path.exists():
+            missing_required.append(str(self.local_model_path))
+            return missing_required, missing_optional
+
+        for rel in REQUIRED_LOCAL_MODEL_FILES:
+            target = self.local_model_path / rel
+            if not target.exists():
+                missing_required.append(str(target))
+
+        for rel in OPTIONAL_LOCAL_MODEL_FILES:
+            target = self.local_model_path / rel
+            if not target.exists():
+                missing_optional.append(str(target))
+
+        if not any((self.local_model_path / w).exists() for w in WEIGHT_CANDIDATES):
+            missing_required.append(
+                " or ".join(str(self.local_model_path / w) for w in WEIGHT_CANDIDATES)
+            )
+
+        if not self.calibration_path.exists():
+            missing_required.append(str(self.calibration_path))
+        else:
+            try:
+                payload = json.loads(self.calibration_path.read_text(encoding="utf-8"))
+                if payload.get("best_threshold", payload.get("threshold")) is None:
+                    missing_required.append(f"{self.calibration_path} (missing best_threshold/threshold)")
+            except Exception as exc:
+                missing_required.append(f"{self.calibration_path} (invalid json: {exc})")
+        return missing_required, missing_optional
+
     def load(self) -> None:
         auth_kwargs = self._hf_auth_kwargs()
-        try:
-            self.tokenizer = AutoTokenizer.from_pretrained(self.model_id, **auth_kwargs)
-            self.model = AutoModelForSequenceClassification.from_pretrained(
-                self.model_id,
-                use_safetensors=True,
-                low_cpu_mem_usage=True,
-                **auth_kwargs,
-            )
-            self.model_source = "hub"
-        except Exception as hub_exc:
-            if not self.local_model_path.exists():
-                raise RuntimeError(
-                    f"Model Hub gagal dan fallback lokal tidak ditemukan: {self.local_model_path}"
-                ) from hub_exc
-            self.tokenizer = AutoTokenizer.from_pretrained(
-                str(self.local_model_path),
-                local_files_only=True,
-            )
-            self.model = AutoModelForSequenceClassification.from_pretrained(
-                str(self.local_model_path),
-                local_files_only=True,
-                use_safetensors=True,
-                low_cpu_mem_usage=True,
-            )
-            self.model_source = "local"
+        missing_required, missing_optional = self._validate_local_artifacts()
+        self.missing_required_artifacts = missing_required
+        self.missing_optional_artifacts = missing_optional
+        self.missing_local_artifacts = list(missing_required)
 
-        self.model.to(self.device)
-        self.model.eval()
-        self._resolve_label_maps(self.model.config)
-        self._load_calibration()
+        local_load_exc = None
+        if not self.missing_required_artifacts:
+            try:
+                self.tokenizer = AutoTokenizer.from_pretrained(
+                    str(self.local_model_path),
+                    local_files_only=True,
+                )
+                self.model = AutoModelForSequenceClassification.from_pretrained(
+                    str(self.local_model_path),
+                    local_files_only=True,
+                    use_safetensors=True,
+                    low_cpu_mem_usage=True,
+                )
+                self.model_source = "local"
+            except Exception as exc:
+                local_load_exc = exc
+                self.model = None
+                self.tokenizer = None
+
+        hub_exc = None
+        if self.model is None or self.tokenizer is None:
+            try:
+                self.tokenizer = AutoTokenizer.from_pretrained(self.model_id, **auth_kwargs)
+                self.model = AutoModelForSequenceClassification.from_pretrained(
+                    self.model_id,
+                    use_safetensors=True,
+                    low_cpu_mem_usage=True,
+                    **auth_kwargs,
+                )
+                self.model_source = "hub"
+            except Exception as exc:
+                hub_exc = exc
+
+        if self.model is None or self.tokenizer is None:
+            detail = []
+            if self.missing_required_artifacts:
+                detail.append("missing required local artifacts: " + "; ".join(self.missing_required_artifacts))
+            if local_load_exc is not None:
+                detail.append(f"local load failed: {local_load_exc}")
+            if hub_exc is not None:
+                detail.append(f"hub load failed: {hub_exc}")
+            raise RuntimeError("Tidak dapat memuat model. " + " | ".join(detail))
+
+        try:
+            self.model.to(self.device)
+            self.model.eval()
+            self._resolve_label_maps(self.model.config)
+            self._load_calibration()
+        except Exception as exc:
+            raise RuntimeError(f"Gagal menyiapkan model runtime: {exc}") from exc
 
     def split_paragraphs(self, text: str) -> List[str]:
         paragraphs = [p.strip() for p in PARAGRAPH_SPLIT_RE.split(str(text).strip()) if p.strip()]
@@ -250,4 +326,3 @@ class InferenceRuntime:
                         }
                     )
         return rows
-

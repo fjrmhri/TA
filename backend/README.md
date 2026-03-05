@@ -42,6 +42,61 @@ Response utama:
   - `prob_fakta`
   - `confidence`
   - `color`
+- Jika `include_ner=true`, setiap kalimat juga memuat:
+  - `ner_entities[]`
+  - `start/end` pada `ner_entities` relatif ke `sentence.text`
+  - bentuk item:
+    - `text`
+    - `entity_group`
+    - `entity_label_id`
+    - `entity_label_id_id`
+    - `score`
+    - `start`
+    - `end`
+
+NER global pada response:
+- `ner.entities` tetap ada untuk backward compatibility (dipakai panel NER lama).
+- `ner.label_legend` berisi metadata label NER yang muncul:
+  - format: `{"TAG":{"id":"TAG","label_id_id":"..."}}`
+
+Contoh ringkas:
+```json
+{
+  "paragraphs": [
+    {
+      "paragraph_index": 0,
+      "sentences": [
+        {
+          "sentence_index": 0,
+          "text": "Jokowi bertemu pejabat di Jakarta.",
+          "label": "Fakta",
+          "color": "green",
+          "ner_entities": [
+            {
+              "text": "Jokowi",
+              "entity_group": "PER",
+              "entity_label_id": "B-PER",
+              "entity_label_id_id": "Orang",
+              "score": 0.9971,
+              "start": 0,
+              "end": 6
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "ner": {
+    "enabled": true,
+    "entities": [
+      {"text": "Jokowi", "entity_group": "PER", "entity_label_id_id": "Orang", "score": 0.9971}
+    ],
+    "label_legend": {
+      "PER": {"id": "PER", "label_id_id": "Orang"}
+    }
+  }
+}
+```
 
 Warna:
 - `orange` jika `confidence < 0.65` (server-side default)
@@ -51,8 +106,8 @@ Warna:
 ## Model loading
 
 Urutan load model:
-1. Hub: `MODEL_ID` (default `fjrmhri/Deteksi_Hoax_TA`)
-2. Fallback lokal: `indobert_hoax_ner_model_final/`
+1. Lokal: `indobert_hoax_ner_model_final/` (primary jika valid)
+2. Fallback Hub: `MODEL_ID` (default `fjrmhri/Deteksi_Hoax_TA`)
 
 Saat startup backend akan log:
 - model source (`hub/local`)

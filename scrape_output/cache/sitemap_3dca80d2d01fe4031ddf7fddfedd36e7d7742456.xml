@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+                          <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+                                  xmlns:news="http://www.google.com/schemas/sitemap-news/0.9">
+                    <url>
+                  <loc>
+                      <![CDATA[https://www.detik.com/pop/awards/d-7144792/billie-eilish-dua-lipa-dan-olivia-rodrigo-manggung-di-grammy-awards-2024]]>
+                  </loc>
+                  <news:news>
+                      <news:publication>
+                          <news:name>detikPop</news:name>
+                          <news:language>id</news:language>
+                      </news:publication>
+                      <news:publication_date>2024-01-16T17:40:00+00:00</news:publication_date>
+                            <news:title><![CDATA[Billie Eilish, Dua Lipa, dan Olivia Rodrigo Manggung di Grammy Awards 2024]]></news:title>
+                      <news:keywords><![CDATA[grammy awards,grammy awards 2024]]></news:keywords>
+                  </news:news>
+                    </url>
+                
+                    <url>
+                  <loc>
+                      <![CDATA[https://www.detik.com/pop/awards/d-7144708/daftar-nominasi-grammy-awards-2024]]>
+                  </loc>
+                  <news:news>
+                      <news:publication>
+                          <news:name>detikPop</news:name>
+                          <news:language>id</news:language>
+                      </news:publication>
+                      <news:publication_date>2024-01-16T17:04:00+00:00</news:publication_date>
+                            <news:title><![CDATA[Daftar Nominasi Grammy Awards 2024]]></news:title>
+                      <news:keywords><![CDATA[grammy awards,grammy awards 2024]]></news:keywords>
+                  </news:news>
+                    </url>
+                
+                    <url>
+                  <loc>
+                      <![CDATA[https://www.detik.com/pop/awards/d-7089585/nominasi-the-golden-globe-awards-2024]]>
+                  </loc>
+                  <news:news>
+                      <news:publication>
+                          <news:name>detikPop</news:name>
+                          <news:language>id</news:language>
+                      </news:publication>
+                      <news:publication_date>2023-12-14T14:29:00+00:00</news:publication_date>
+                            <news:title><![CDATA[Nominasi The Golden Globe Awards 2024]]></news:title>
+                      <news:keywords><![CDATA[golden globe awards,golden globe awards 2024]]></news:keywords>
+                  </news:news>
+                    </url>
+                
+                    <url>
+                  <loc>
+                      <![CDATA[https://www.detik.com/pop/awards/d-7089459/daftar-pemenang-lengkap-ami-awards-2023]]>
+                  </loc>
+                  <news:news>
+                      <news:publication>
+                          <news:name>detikPop</news:name>
+                          <news:language>id</news:language>
+                      </news:publication>
+                      <news:publication_date>2023-12-14T13:47:00+00:00</news:publication_date>
+                            <news:title><![CDATA[Daftar Pemenang Lengkap AMI Awards 2023]]></news:title>
+                      <news:keywords><![CDATA[ami awards 2023,ami awards,awards]]></news:keywords>
+                  </news:news>
+                    </url>
+                </urlset>
