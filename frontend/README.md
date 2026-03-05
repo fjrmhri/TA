@@ -2,6 +2,8 @@
 
 Frontend static untuk analisis hoaks per kalimat dengan hasil:
 - highlight warna (`red` / `green` / `orange`)
+- underline entitas NER di dalam teks kalimat
+- tooltip NER saat `hover` / `focus`, dan bisa `pin` saat click
 - ringkasan count
 - panel `Confidence` (collapsible)
 - panel `NER` (collapsible)
@@ -16,6 +18,20 @@ Frontend static untuk analisis hoaks per kalimat dengan hasil:
 UI tidak memiliki:
 - input URL backend
 - input threshold warna
+
+## Perilaku NER di teks highlight
+
+- Entitas NER di-render sebagai teks bergaris bawah putus-putus.
+- Tooltip menampilkan:
+  - `Jenis` (`entity_group`)
+  - `Label` (`entity_label_id_id`)
+  - `Skor` (persentase)
+- Tooltip aktif saat hover/focus.
+- Klik pada entitas akan mem-pin tooltip; klik di luar entitas melepas pin.
+- Fallback label untuk tag yang tidak ada mapping Indonesia:
+  - `Label asli model: TAG`
+
+Panel NER lama tetap dipertahankan dan tetap membaca `ner.entities`.
 
 ## Konfigurasi endpoint
 

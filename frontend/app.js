@@ -46,8 +46,87 @@ function escapeHtml(value) {
     .replace(/'/g, "&#039;");
 }
 
+function escapeAttr(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
 function pct(value) {
   return `${(Number(value) * 100).toFixed(2)}%`;
+}
+
+function renderSentenceWithNer(text, nerEntities) {
+  const sentenceText = String(text ?? "");
+  if (!Array.isArray(nerEntities) || nerEntities.length === 0) {
+    return escapeHtml(sentenceText);
+  }
+
+  const normalized = nerEntities
+    .map((entity) => ({
+      start: Number.parseInt(entity?.start, 10),
+      end: Number.parseInt(entity?.end, 10),
+      entity_group: String(entity?.entity_group ?? "").trim().toUpperCase(),
+      entity_label_id_id: String(
+        entity?.entity_label_id_id ?? `Label asli model: ${String(entity?.entity_group ?? "").trim().toUpperCase()}`
+      ),
+      score: Number(entity?.score ?? 0),
+    }))
+    .filter(
+      (entity) =>
+        Number.isFinite(entity.start) &&
+        Number.isFinite(entity.end) &&
+        entity.start >= 0 &&
+        entity.end > entity.start &&
+        entity.end <= sentenceText.length
+    )
+    .sort((a, b) => {
+      if (a.start !== b.start) {
+        return a.start - b.start;
+      }
+      return a.end - b.end;
+    });
+
+  if (normalized.length === 0) {
+    return escapeHtml(sentenceText);
+  }
+
+  const parts = [];
+  let cursor = 0;
+  let lastEnd = -1;
+
+  for (const entity of normalized) {
+    if (entity.start < lastEnd) {
+      continue;
+    }
+    if (entity.start > cursor) {
+      parts.push(escapeHtml(sentenceText.slice(cursor, entity.start)));
+    }
+
+    const entityText = sentenceText.slice(entity.start, entity.end);
+    if (!entityText.trim()) {
+      continue;
+    }
+
+    const tooltip = [
+      `Jenis: ${entity.entity_group || "-"}`,
+      `Label: ${entity.entity_label_id_id || "-"}`,
+      `Skor: ${pct(Number.isFinite(entity.score) ? entity.score : 0)}`,
+    ].join("\n");
+    parts.push(
+      `<span class="ner-entity" tabindex="0" data-tooltip="${escapeAttr(tooltip)}">${escapeHtml(entityText)}</span>`
+    );
+    cursor = entity.end;
+    lastEnd = entity.end;
+  }
+
+  if (cursor < sentenceText.length) {
+    parts.push(escapeHtml(sentenceText.slice(cursor)));
+  }
+
+  return parts.join("");
 }
 
 function setLoading(isLoading) {
@@ -88,14 +167,14 @@ function renderHighlights(paragraphs) {
   const blocks = paragraphs
     .map((paragraph) => {
       const spans = paragraph.sentences
-        .map(
-          (sentence) =>
-            `<span class="hl ${escapeHtml(sentence.color)}" title="${escapeHtml(
-              `${sentence.label} | conf ${pct(sentence.confidence)} | Hoaks ${pct(sentence.prob_hoax)} | Fakta ${pct(
-                sentence.prob_fakta
-              )}`
-            )}">${escapeHtml(sentence.text)}</span>`
-        )
+        .map((sentence) => {
+          const renderedSentence = renderSentenceWithNer(sentence.text, sentence.ner_entities);
+          return `<span class="hl ${escapeHtml(sentence.color)}" title="${escapeHtml(
+            `${sentence.label} | conf ${pct(sentence.confidence)} | Hoaks ${pct(sentence.prob_hoax)} | Fakta ${pct(
+              sentence.prob_fakta
+            )}`
+          )}">${renderedSentence}</span>`;
+        })
         .join(" ");
 
       return `
@@ -164,6 +243,11 @@ function renderNer(ner) {
       <article class="entity-card">
         <span class="entity-type">${escapeHtml(entity.entity_group)}</span>
         <span class="entity-text">${escapeHtml(entity.text)}</span>
+        ${
+          entity.entity_label_id_id
+            ? `<span class="entity-label-id">${escapeHtml(entity.entity_label_id_id)}</span>`
+            : ""
+        }
         <span class="entity-score">Score: ${pct(entity.score)}</span>
       </article>
     `
@@ -192,10 +276,38 @@ function formatCopyText(data) {
 
   lines.push(`NER enabled: ${data.ner.enabled}`);
   for (const entity of data.ner.entities) {
-    lines.push(`- ${entity.entity_group}: ${entity.text} (${pct(entity.score)})`);
+    const labelInfo = entity.entity_label_id_id ? ` | Label: ${entity.entity_label_id_id}` : "";
+    lines.push(`- ${entity.entity_group}: ${entity.text} (${pct(entity.score)})${labelInfo}`);
   }
   return lines.join("\n");
 }
+
+function clearPinnedNerEntity(exceptElement = null) {
+  highlightContent.querySelectorAll(".ner-entity.pinned").forEach((entityNode) => {
+    if (entityNode !== exceptElement) {
+      entityNode.classList.remove("pinned");
+    }
+  });
+}
+
+highlightContent.addEventListener("click", (event) => {
+  const target = event.target.closest(".ner-entity");
+  if (!target) {
+    clearPinnedNerEntity();
+    return;
+  }
+
+  event.stopPropagation();
+  const nextPinnedState = !target.classList.contains("pinned");
+  clearPinnedNerEntity(target);
+  target.classList.toggle("pinned", nextPinnedState);
+});
+
+document.addEventListener("click", (event) => {
+  if (!event.target.closest(".ner-entity")) {
+    clearPinnedNerEntity();
+  }
+});
 
 analyzeForm.addEventListener("submit", async (event) => {
   event.preventDefault();

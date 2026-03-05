@@ -256,6 +256,51 @@ button.secondary:hover {
   color: var(--hl-orange-text);
 }
 
+.ner-entity {
+  position: relative;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+  cursor: help;
+  outline: none;
+}
+
+.ner-entity:focus {
+  outline: 2px solid rgba(13, 138, 106, 0.45);
+  outline-offset: 2px;
+}
+
+.ner-entity::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translate(-50%, 4px);
+  min-width: 160px;
+  max-width: min(280px, 80vw);
+  padding: 0.45rem 0.6rem;
+  border-radius: 8px;
+  background: rgba(16, 26, 24, 0.92);
+  color: #f6fffc;
+  font-size: 0.76rem;
+  line-height: 1.35;
+  white-space: pre-line;
+  box-shadow: 0 8px 20px rgba(6, 14, 12, 0.32);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  z-index: 60;
+  transition: opacity 150ms ease, visibility 150ms ease, transform 150ms ease;
+}
+
+.ner-entity:hover::after,
+.ner-entity:focus::after,
+.ner-entity.pinned::after {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, 0);
+}
+
 #confidenceContent .confidence-block {
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -308,6 +353,17 @@ button.secondary:hover {
   font-weight: 700;
 }
 
+.entity-label-id {
+  display: inline-block;
+  width: fit-content;
+  font-size: 0.78rem;
+  color: #355f55;
+  background: #edf6f2;
+  border: 1px solid #d0e4db;
+  border-radius: 999px;
+  padding: 0.08rem 0.5rem;
+}
+
 .entity-score {
   font-size: 0.9rem;
   color: #355f55;
@@ -347,5 +403,16 @@ button.secondary:hover {
   .confidence-item {
     flex-direction: column;
     gap: 0.2rem;
+  }
+
+  .ner-entity::after {
+    left: 0;
+    transform: translate(0, 4px);
+  }
+
+  .ner-entity:hover::after,
+  .ner-entity:focus::after,
+  .ner-entity.pinned::after {
+    transform: translate(0, 0);
   }
 }
