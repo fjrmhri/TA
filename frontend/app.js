@@ -62,18 +62,31 @@ function pct(value) {
 // - Sebelumnya fallback label membentuk string "Label asli model: <TAG>".
 // - Tooltip juga menampilkan "Jenis: <TAG> / Label: <raw label> / Skor".
 // - Kini tooltip dipadatkan ke "Jenis Indonesia / Kode / Skor" dan label redundan dibersihkan.
-const NER_JENIS_ID = {
+const NER_LABEL_ID = {
+  CRD: "Angka kardinal",
+  ORD: "Angka urutan",
+  DAT: "Tanggal",
+  TIM: "Waktu",
+  MON: "Uang",
+  PRC: "Persentase",
+  QTY: "Kuantitas/Ukuran",
   PER: "Orang",
+  ORG: "Organisasi/Institusi",
+  NOR: "Organisasi politik",
+  GPE: "Entitas geopolitik",
   LOC: "Lokasi",
-  ORG: "Organisasi/Instansi",
-  NOR: "Organisasi/Instansi",
-  MON: "Uang/Nominal",
-  PRD: "Produk/Platform",
+  FAC: "Fasilitas",
+  LAW: "Entitas hukum",
+  PRD: "Produk/Merek",
+  EVT: "Peristiwa",
+  REG: "Agama",
+  LAN: "Bahasa",
+  WOA: "Karya seni",
 };
 
-function getJenisNerId(tag) {
-  const normalizedTag = String(tag ?? "").trim().toUpperCase();
-  return NER_JENIS_ID[normalizedTag] || normalizedTag || "-";
+function jenisIndonesia(tag) {
+  const key = String(tag ?? "").trim().toUpperCase();
+  return NER_LABEL_ID[key] || key || "-";
 }
 
 function bersihkanLabelNer(rawLabel, tag) {
@@ -88,7 +101,7 @@ function bersihkanLabelNer(rawLabel, tag) {
   }
 
   if (cleaned.toUpperCase() === normalizedTag) {
-    return NER_JENIS_ID[normalizedTag] || "";
+    return "";
   }
   return cleaned;
 }
@@ -104,7 +117,6 @@ function renderSentenceWithNer(text, nerEntities) {
       start: Number.parseInt(entity?.start, 10),
       end: Number.parseInt(entity?.end, 10),
       entity_group: String(entity?.entity_group ?? "").trim().toUpperCase(),
-      entity_label_id_id: entity?.entity_label_id_id == null ? "" : String(entity.entity_label_id_id),
       score: Number(entity?.score ?? 0),
     }))
     .filter(
@@ -144,7 +156,7 @@ function renderSentenceWithNer(text, nerEntities) {
     }
 
     const tag = entity.entity_group || "-";
-    const jenis = getJenisNerId(tag);
+    const jenis = jenisIndonesia(tag);
     const tooltip = [
       `Jenis: ${jenis}`,
       `Kode: ${tag}`,
@@ -275,7 +287,7 @@ function renderNer(ner) {
   const html = entities
     .map((entity) => {
       const tag = String(entity?.entity_group ?? "").trim().toUpperCase();
-      const jenis = getJenisNerId(tag);
+      const jenis = jenisIndonesia(tag);
       const cleanedLabel = bersihkanLabelNer(entity?.entity_label_id_id, tag);
       const showCleanedLabel = Boolean(cleanedLabel) && cleanedLabel.toLowerCase() !== jenis.toLowerCase();
       return `
@@ -313,7 +325,7 @@ function formatCopyText(data) {
   lines.push(`NER enabled: ${data.ner.enabled}`);
   for (const entity of data.ner.entities) {
     const tag = String(entity?.entity_group ?? "").trim().toUpperCase();
-    const jenis = getJenisNerId(tag);
+    const jenis = jenisIndonesia(tag);
     const cleanedLabel = bersihkanLabelNer(entity?.entity_label_id_id, tag);
     const labelInfo = cleanedLabel && cleanedLabel.toLowerCase() !== jenis.toLowerCase() ? ` | Label: ${cleanedLabel}` : "";
     lines.push(`- ${tag}: ${entity.text} (${pct(entity.score)}) | Jenis: ${jenis}${labelInfo}`);
