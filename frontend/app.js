@@ -58,6 +58,41 @@ function pct(value) {
   return `${(Number(value) * 100).toFixed(2)}%`;
 }
 
+// Catatan analisis cepat:
+// - Sebelumnya fallback label membentuk string "Label asli model: <TAG>".
+// - Tooltip juga menampilkan "Jenis: <TAG> / Label: <raw label> / Skor".
+// - Kini tooltip dipadatkan ke "Jenis Indonesia / Kode / Skor" dan label redundan dibersihkan.
+const NER_JENIS_ID = {
+  PER: "Orang",
+  LOC: "Lokasi",
+  ORG: "Organisasi/Instansi",
+  NOR: "Organisasi/Instansi",
+  MON: "Uang/Nominal",
+  PRD: "Produk/Platform",
+};
+
+function getJenisNerId(tag) {
+  const normalizedTag = String(tag ?? "").trim().toUpperCase();
+  return NER_JENIS_ID[normalizedTag] || normalizedTag || "-";
+}
+
+function bersihkanLabelNer(rawLabel, tag) {
+  if (rawLabel == null) {
+    return "";
+  }
+
+  const normalizedTag = String(tag ?? "").trim().toUpperCase();
+  const cleaned = String(rawLabel).replace(/^label asli model:\s*/i, "").trim();
+  if (!cleaned) {
+    return "";
+  }
+
+  if (cleaned.toUpperCase() === normalizedTag) {
+    return NER_JENIS_ID[normalizedTag] || "";
+  }
+  return cleaned;
+}
+
 function renderSentenceWithNer(text, nerEntities) {
   const sentenceText = String(text ?? "");
   if (!Array.isArray(nerEntities) || nerEntities.length === 0) {
@@ -69,9 +104,7 @@ function renderSentenceWithNer(text, nerEntities) {
       start: Number.parseInt(entity?.start, 10),
       end: Number.parseInt(entity?.end, 10),
       entity_group: String(entity?.entity_group ?? "").trim().toUpperCase(),
-      entity_label_id_id: String(
-        entity?.entity_label_id_id ?? `Label asli model: ${String(entity?.entity_group ?? "").trim().toUpperCase()}`
-      ),
+      entity_label_id_id: entity?.entity_label_id_id == null ? "" : String(entity.entity_label_id_id),
       score: Number(entity?.score ?? 0),
     }))
     .filter(
@@ -110,9 +143,11 @@ function renderSentenceWithNer(text, nerEntities) {
       continue;
     }
 
+    const tag = entity.entity_group || "-";
+    const jenis = getJenisNerId(tag);
     const tooltip = [
-      `Jenis: ${entity.entity_group || "-"}`,
-      `Label: ${entity.entity_label_id_id || "-"}`,
+      `Jenis: ${jenis}`,
+      `Kode: ${tag}`,
       `Skor: ${pct(Number.isFinite(entity.score) ? entity.score : 0)}`,
     ].join("\n");
     parts.push(
@@ -238,20 +273,21 @@ function renderNer(ner) {
   }
 
   const html = entities
-    .map(
-      (entity) => `
+    .map((entity) => {
+      const tag = String(entity?.entity_group ?? "").trim().toUpperCase();
+      const jenis = getJenisNerId(tag);
+      const cleanedLabel = bersihkanLabelNer(entity?.entity_label_id_id, tag);
+      const showCleanedLabel = Boolean(cleanedLabel) && cleanedLabel.toLowerCase() !== jenis.toLowerCase();
+      return `
       <article class="entity-card">
         <span class="entity-type">${escapeHtml(entity.entity_group)}</span>
         <span class="entity-text">${escapeHtml(entity.text)}</span>
-        ${
-          entity.entity_label_id_id
-            ? `<span class="entity-label-id">${escapeHtml(entity.entity_label_id_id)}</span>`
-            : ""
-        }
+        <span class="entity-label-id">Jenis: ${escapeHtml(jenis)}</span>
+        ${showCleanedLabel ? `<span class="entity-label-id">Label: ${escapeHtml(cleanedLabel)}</span>` : ""}
         <span class="entity-score">Score: ${pct(entity.score)}</span>
       </article>
-    `
-    )
+    `;
+    })
     .join("");
 
   nerContent.innerHTML = html;
@@ -276,8 +312,11 @@ function formatCopyText(data) {
 
   lines.push(`NER enabled: ${data.ner.enabled}`);
   for (const entity of data.ner.entities) {
-    const labelInfo = entity.entity_label_id_id ? ` | Label: ${entity.entity_label_id_id}` : "";
-    lines.push(`- ${entity.entity_group}: ${entity.text} (${pct(entity.score)})${labelInfo}`);
+    const tag = String(entity?.entity_group ?? "").trim().toUpperCase();
+    const jenis = getJenisNerId(tag);
+    const cleanedLabel = bersihkanLabelNer(entity?.entity_label_id_id, tag);
+    const labelInfo = cleanedLabel && cleanedLabel.toLowerCase() !== jenis.toLowerCase() ? ` | Label: ${cleanedLabel}` : "";
+    lines.push(`- ${tag}: ${entity.text} (${pct(entity.score)}) | Jenis: ${jenis}${labelInfo}`);
   }
   return lines.join("\n");
 }
