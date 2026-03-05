@@ -1,68 +1,111 @@
 {
   "output_dir": "D:\\TA\\code\\Berita_Hoax\\data\\processed",
-  "rows_total": 46755,
+  "rows_total": 56905,
   "train": {
-    "rows": 32730,
+    "rows": 39834,
     "label_dist": {
-      "0": 24095,
-      "1": 8635
+      "0": 24007,
+      "1": 15827
     },
     "source_label": {
       "0": {
-        "cnn": 567,
-        "detik": 12946,
-        "kompas": 3400,
-        "turnbackhoax": 7182
+        "cnn": 574,
+        "detik": 13017,
+        "kompas": 3558,
+        "turnbackhoax": 6858
       },
       "1": {
         "cnn": 0,
         "detik": 0,
         "kompas": 0,
-        "turnbackhoax": 8635
+        "turnbackhoax": 15827
       }
     }
   },
   "val": {
-    "rows": 7021,
+    "rows": 8441,
     "label_dist": {
-      "0": 5170,
-      "1": 1851
+      "0": 5164,
+      "1": 3277
     },
     "source_label": {
       "0": {
-        "cnn": 115,
-        "detik": 2777,
-        "kompas": 732,
-        "turnbackhoax": 1546
+        "cnn": 125,
+        "detik": 2835,
+        "kompas": 760,
+        "turnbackhoax": 1444
       },
       "1": {
         "cnn": 0,
         "detik": 0,
         "kompas": 0,
-        "turnbackhoax": 1851
+        "turnbackhoax": 3277
       }
     }
   },
   "test": {
-    "rows": 7004,
+    "rows": 8630,
     "label_dist": {
-      "0": 5183,
-      "1": 1821
+      "0": 5151,
+      "1": 3479
     },
     "source_label": {
       "0": {
-        "cnn": 121,
-        "detik": 2755,
-        "kompas": 778,
-        "turnbackhoax": 1529
+        "cnn": 112,
+        "detik": 2782,
+        "kompas": 732,
+        "turnbackhoax": 1525
       },
       "1": {
         "cnn": 0,
         "detik": 0,
         "kompas": 0,
-        "turnbackhoax": 1821
+        "turnbackhoax": 3479
       }
     }
+  },
+  "leakage": {
+    "pass": true,
+    "max_gap": 0.040709,
+    "threshold": 0.2,
+    "worst_markers": [
+      {
+        "marker": "tahun_2021_2026",
+        "label0_prevalence": 0.258085,
+        "label1_prevalence": 0.217376,
+        "gap_abs": 0.040709,
+        "gap_signed": -0.040709
+      },
+      {
+        "marker": "politik",
+        "label0_prevalence": 0.009178,
+        "label1_prevalence": 0.020325,
+        "gap_abs": 0.011147,
+        "gap_signed": 0.011147
+      },
+      {
+        "marker": "uncategorized",
+        "label0_prevalence": 0.0,
+        "label1_prevalence": 0.0,
+        "gap_abs": 0.0,
+        "gap_signed": 0.0
+      },
+      {
+        "marker": "akun",
+        "label0_prevalence": 0.0,
+        "label1_prevalence": 0.0,
+        "gap_abs": 0.0,
+        "gap_signed": 0.0
+      },
+      {
+        "marker": "facebook",
+        "label0_prevalence": 0.0,
+        "label1_prevalence": 0.0,
+        "gap_abs": 0.0,
+        "gap_signed": 0.0
+      }
+    ],
+    "audit_file": "D:\\TA\\code\\Berita_Hoax\\data\\processed\\leakage_audit.json"
   },
   "files": {
     "train": "D:\\TA\\code\\Berita_Hoax\\data\\processed\\train.csv",

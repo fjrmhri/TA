@@ -11,7 +11,7 @@ import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, List, Sequence, Tuple
+from typing import Dict, List, Sequence, Tuple
 
 import pandas as pd
 from sklearn.model_selection import StratifiedGroupKFold
@@ -38,6 +38,10 @@ SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
 
 DEBUNK_KEYWORDS_RE = re.compile(
     r"\b(faktanya|cek fakta|klarifikasi|berdasarkan|kesimpulan|tidak benar|hasilnya|fakta)\b",
+    flags=re.IGNORECASE,
+)
+CLAIM_KEYWORDS_RE = re.compile(
+    r"\b(beredar|diklaim|klaim|narasi|unggahan|viral|hoaks|disinformasi)\b",
     flags=re.IGNORECASE,
 )
 
@@ -68,12 +72,38 @@ BOILERPLATE_PATTERNS: Sequence[Tuple[re.Pattern[str], str]] = [
         " ",
     ),
     (
+        re.compile(r"(?i)^\s*(salah|tipu|penipuan|sesat|disinformasi|fitnah)\b[:\-\s]*"),
+        " ",
+    ),
+    (re.compile(r"(?i)\buncategorized\b"), " "),
+    (re.compile(r"(?i)\b(?:facebook|twitter|x\.com|tiktok|youtube|instagram|whatsapp)\b"), " "),
+    (re.compile(r"(?i)\bakun\b"), " "),
+    (re.compile(r"(?i)\bunggah(?:an)?\b"), " "),
+    (re.compile(r"(?i)\bnarasi\b"), " "),
+    (re.compile(r"(?i)\bakun\b[^.!?\n]{0,140}\bunggah\b[^.!?\n]*"), " "),
+    (
         re.compile(
-            r"(?i)^\s*(salah|tipu|penipuan|sesat|disinformasi|fitnah)\b[:\-\s]*"
+            r"(?i)\b(?:politik|lowong|nasional|internasional|ekonomi|teknologi|olahraga|hiburan|edukasi)"
+            r"\s+\d{1,2}\s+\d{1,2}\s+\d{4}\b"
         ),
         " ",
     ),
+    (re.compile(r"(?i)\b\d{1,2}\s*[/-]\s*\d{1,2}\s*[/-]\s*\d{2,4}\b"), " "),
+    (re.compile(r"(?i)\b\d{1,2}\s+\d{1,2}\s+\d{4}\b"), " "),
+    (re.compile(r"(?i)\b\d{1,2}:\d{2}\s*wib\b"), " "),
+    (re.compile(r"(?i)\b(?:sumber|sumbr|summber)\b\s*[:\-]?\s*"), " "),
 ]
+
+LEAKAGE_MARKERS: Dict[str, re.Pattern[str]] = {
+    "uncategorized": re.compile(r"\buncategorized\b", flags=re.IGNORECASE),
+    "akun": re.compile(r"\bakun\b", flags=re.IGNORECASE),
+    "facebook": re.compile(r"\bfacebook\b", flags=re.IGNORECASE),
+    "tiktok": re.compile(r"\btiktok\b", flags=re.IGNORECASE),
+    "narasi": re.compile(r"\bnarasi\b", flags=re.IGNORECASE),
+    "unggah": re.compile(r"\bunggah\b", flags=re.IGNORECASE),
+    "politik": re.compile(r"\bpolitik\b", flags=re.IGNORECASE),
+    "tahun_2021_2026": re.compile(r"\b202[1-6]\b"),
+}
 
 
 @dataclass
@@ -84,6 +114,7 @@ class BuildConfig:
     min_words: int = 6
     nonhoax_lead_sentences: int = 2
     val_test_ratio_from_holdout: float = 0.5
+    leakage_gap_threshold: float = 0.20
 
 
 def normalize_whitespace(text: str) -> str:
@@ -95,7 +126,7 @@ def clean_text(text: str) -> str:
     for pattern, replacement in BOILERPLATE_PATTERNS:
         cleaned = pattern.sub(replacement, cleaned)
     cleaned = normalize_whitespace(cleaned)
-    cleaned = cleaned.strip(" -–—:;,.")
+    cleaned = cleaned.strip(" -:;,.")
     return cleaned
 
 
@@ -137,6 +168,69 @@ def pick_nonhoax_text(row: pd.Series, min_words: int, nonhoax_lead_sentences: in
     return ""
 
 
+def pick_claim_style_factual(row: pd.Series, min_words: int) -> str:
+    candidates: List[str] = []
+    candidates.append(str(row.get("summary", "")))
+    isi_sentences = split_sentences(str(row.get("isi_berita", "")))
+    candidates.extend(isi_sentences[:4])
+
+    for item in candidates:
+        cleaned = clean_text(item)
+        if not valid_text(cleaned, min_words):
+            continue
+        if DEBUNK_KEYWORDS_RE.search(cleaned):
+            continue
+        if CLAIM_KEYWORDS_RE.search(cleaned):
+            return cleaned
+    return ""
+
+
+def extract_claim_like_sentence(row: pd.Series, min_words: int) -> str:
+    for col_name in ["Clean Narasi", "Narasi"]:
+        raw_value = str(row.get(col_name, ""))
+        if not raw_value.strip():
+            continue
+        sentences = split_sentences(raw_value)
+
+        for sentence in sentences:
+            cleaned = clean_text(sentence)
+            if not valid_text(cleaned, min_words):
+                continue
+            if DEBUNK_KEYWORDS_RE.search(cleaned):
+                continue
+            if CLAIM_KEYWORDS_RE.search(cleaned):
+                return cleaned
+
+        for sentence in sentences:
+            cleaned = clean_text(sentence)
+            if valid_text(cleaned, min_words) and not DEBUNK_KEYWORDS_RE.search(cleaned):
+                return cleaned
+
+    isi_sentences = split_sentences(str(row.get("isi_berita", "")))
+    for sentence in isi_sentences:
+        cleaned = clean_text(sentence)
+        if not valid_text(cleaned, min_words):
+            continue
+        if DEBUNK_KEYWORDS_RE.search(cleaned):
+            continue
+        if CLAIM_KEYWORDS_RE.search(cleaned):
+            return cleaned
+    return ""
+
+
+def pick_hoax_title_claim(row: pd.Series, min_words: int) -> str:
+    title = clean_text(str(row.get("judul", "")))
+    if not valid_text(title, min_words):
+        return ""
+    if DEBUNK_KEYWORDS_RE.search(title):
+        return ""
+    sentences = split_sentences(title)
+    if not sentences:
+        return title
+    first = clean_text(sentences[0])
+    return first if valid_text(first, min_words) else title
+
+
 def pick_debunk_sentence(isi_berita: str, min_words: int) -> str:
     original_sentences = split_sentences(isi_berita)
     if not original_sentences:
@@ -149,7 +243,6 @@ def pick_debunk_sentence(isi_berita: str, min_words: int) -> str:
             break
 
     if not selected:
-        # Fallback: sentence from later part of the article (bias toward clarification section).
         fallback_idx = min(len(original_sentences) - 1, max(0, int(len(original_sentences) * 0.66)))
         selected = original_sentences[fallback_idx]
 
@@ -184,7 +277,20 @@ def build_records(config: BuildConfig) -> pd.DataFrame:
             )
 
             if source == "turnbackhoax":
-                claim = clean_text(row.get("Clean Narasi", "") or row.get("Narasi", ""))
+                title_claim = pick_hoax_title_claim(row=row, min_words=config.min_words)
+                if valid_text(title_claim, config.min_words):
+                    records.append(
+                        {
+                            "text": title_claim,
+                            "label": 1,
+                            "source": source,
+                            "url_hash": url_hash,
+                            "title_hash": title_hash,
+                            "unit_type": "claim_title",
+                        }
+                    )
+
+                claim = extract_claim_like_sentence(row=row, min_words=config.min_words)
                 if valid_text(claim, config.min_words):
                     records.append(
                         {
@@ -228,6 +334,19 @@ def build_records(config: BuildConfig) -> pd.DataFrame:
                     }
                 )
 
+            hard_negative = pick_claim_style_factual(row=row, min_words=config.min_words)
+            if hard_negative and hard_negative != fakta_text:
+                records.append(
+                    {
+                        "text": hard_negative,
+                        "label": 0,
+                        "source": source,
+                        "url_hash": url_hash,
+                        "title_hash": title_hash,
+                        "unit_type": "hard_negative",
+                    }
+                )
+
     if not records:
         raise RuntimeError("Tidak ada record valid yang berhasil dibangun.")
 
@@ -243,9 +362,7 @@ def build_records(config: BuildConfig) -> pd.DataFrame:
     return df_records
 
 
-def choose_holdout_folds(
-    fold_sizes: Dict[int, int], total: int, target_ratio: float
-) -> Tuple[int, ...]:
+def choose_holdout_folds(fold_sizes: Dict[int, int], total: int, target_ratio: float) -> Tuple[int, ...]:
     fold_ids = sorted(fold_sizes.keys())
     target_size = total * target_ratio
     best_combo: Tuple[int, ...] = tuple(fold_ids[:3])
@@ -286,12 +403,10 @@ def stratified_group_split(
     inner = StratifiedGroupKFold(n_splits=2, shuffle=True, random_state=seed)
     inner_groups = holdout_df["url_hash"].astype(str).values
     inner_labels = holdout_df["label"].astype(int).values
-    inner_split = next(inner.split(holdout_df["text"], inner_labels, groups=inner_groups))
-    val_rel_idx, test_rel_idx = inner_split
+    val_rel_idx, test_rel_idx = next(inner.split(holdout_df["text"], inner_labels, groups=inner_groups))
 
     val_df = holdout_df.iloc[val_rel_idx].reset_index(drop=True)
     test_df = holdout_df.iloc[test_rel_idx].reset_index(drop=True)
-
     return train_df, val_df, test_df
 
 
@@ -310,9 +425,42 @@ def summarize_split(name: str, df: pd.DataFrame) -> Dict[str, object]:
     return summary
 
 
+def compute_leakage_audit(df: pd.DataFrame, threshold: float) -> Dict[str, object]:
+    label0 = df[df["label"] == 0]["text"].astype(str)
+    label1 = df[df["label"] == 1]["text"].astype(str)
+    total0 = len(label0)
+    total1 = len(label1)
+
+    marker_stats: List[Dict[str, object]] = []
+    for name, pattern in LEAKAGE_MARKERS.items():
+        p0 = float(label0.str.contains(pattern, na=False).mean()) if total0 else 0.0
+        p1 = float(label1.str.contains(pattern, na=False).mean()) if total1 else 0.0
+        marker_stats.append(
+            {
+                "marker": name,
+                "label0_prevalence": round(p0, 6),
+                "label1_prevalence": round(p1, 6),
+                "gap_abs": round(abs(p1 - p0), 6),
+                "gap_signed": round(p1 - p0, 6),
+            }
+        )
+
+    marker_stats.sort(key=lambda x: x["gap_abs"], reverse=True)
+    max_gap = float(marker_stats[0]["gap_abs"]) if marker_stats else 0.0
+    return {
+        "threshold": float(threshold),
+        "pass": bool(max_gap <= threshold),
+        "max_gap": max_gap,
+        "markers": marker_stats,
+        "worst_markers": marker_stats[:5],
+        "label_counts": {"0": int(total0), "1": int(total1)},
+    }
+
+
 def run(config: BuildConfig) -> None:
     config.output_dir.mkdir(parents=True, exist_ok=True)
     dataset = build_records(config)
+    leakage_audit = compute_leakage_audit(dataset, threshold=config.leakage_gap_threshold)
 
     train_df, val_df, test_df = stratified_group_split(
         dataset, seed=config.seed, val_test_ratio_from_holdout=config.val_test_ratio_from_holdout
@@ -327,12 +475,36 @@ def run(config: BuildConfig) -> None:
     val_df[out_columns].to_csv(val_path, index=False)
     test_df[out_columns].to_csv(test_path, index=False)
 
+    leakage_path = config.output_dir / "leakage_audit.json"
+    leakage_path.write_text(json.dumps(leakage_audit, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    print(f"\n[build_dataset] leakage_audit written: {leakage_path}")
+    if leakage_audit["worst_markers"]:
+        print("[build_dataset] top leakage markers:")
+        for row in leakage_audit["worst_markers"]:
+            print(
+                "  - {marker}: p0={label0_prevalence:.3f} p1={label1_prevalence:.3f} gap={gap_abs:.3f}".format(
+                    **row
+                )
+            )
+    print(
+        f"[build_dataset] leakage pass={leakage_audit['pass']} "
+        f"(max_gap={leakage_audit['max_gap']:.3f}, threshold={config.leakage_gap_threshold:.3f})"
+    )
+
     summary = {
         "output_dir": str(config.output_dir),
         "rows_total": int(len(dataset)),
         "train": summarize_split("train", train_df),
         "val": summarize_split("val", val_df),
         "test": summarize_split("test", test_df),
+        "leakage": {
+            "pass": bool(leakage_audit["pass"]),
+            "max_gap": float(leakage_audit["max_gap"]),
+            "threshold": float(leakage_audit["threshold"]),
+            "worst_markers": leakage_audit["worst_markers"],
+            "audit_file": str(leakage_path),
+        },
         "files": {
             "train": str(train_path),
             "val": str(val_path),
@@ -362,6 +534,12 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     )
     parser.add_argument("--seed", type=int, default=42, help="Random seed.")
     parser.add_argument("--min-words", type=int, default=6, help="Minimum words per text unit.")
+    parser.add_argument(
+        "--leakage-gap-threshold",
+        type=float,
+        default=0.20,
+        help="Maksimum gap prevalensi marker leakage antarkelas.",
+    )
     return parser.parse_args(argv)
 
 
@@ -372,6 +550,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         output_dir=args.output_dir.resolve(),
         seed=args.seed,
         min_words=args.min_words,
+        leakage_gap_threshold=float(args.leakage_gap_threshold),
     )
     run(cfg)
     return 0

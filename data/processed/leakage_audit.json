@@ -1,0 +1,104 @@
+{
+  "threshold": 0.2,
+  "pass": true,
+  "max_gap": 0.040709,
+  "markers": [
+    {
+      "marker": "tahun_2021_2026",
+      "label0_prevalence": 0.258085,
+      "label1_prevalence": 0.217376,
+      "gap_abs": 0.040709,
+      "gap_signed": -0.040709
+    },
+    {
+      "marker": "politik",
+      "label0_prevalence": 0.009178,
+      "label1_prevalence": 0.020325,
+      "gap_abs": 0.011147,
+      "gap_signed": 0.011147
+    },
+    {
+      "marker": "uncategorized",
+      "label0_prevalence": 0.0,
+      "label1_prevalence": 0.0,
+      "gap_abs": 0.0,
+      "gap_signed": 0.0
+    },
+    {
+      "marker": "akun",
+      "label0_prevalence": 0.0,
+      "label1_prevalence": 0.0,
+      "gap_abs": 0.0,
+      "gap_signed": 0.0
+    },
+    {
+      "marker": "facebook",
+      "label0_prevalence": 0.0,
+      "label1_prevalence": 0.0,
+      "gap_abs": 0.0,
+      "gap_signed": 0.0
+    },
+    {
+      "marker": "tiktok",
+      "label0_prevalence": 0.0,
+      "label1_prevalence": 0.0,
+      "gap_abs": 0.0,
+      "gap_signed": 0.0
+    },
+    {
+      "marker": "narasi",
+      "label0_prevalence": 0.0,
+      "label1_prevalence": 0.0,
+      "gap_abs": 0.0,
+      "gap_signed": 0.0
+    },
+    {
+      "marker": "unggah",
+      "label0_prevalence": 0.0,
+      "label1_prevalence": 0.0,
+      "gap_abs": 0.0,
+      "gap_signed": 0.0
+    }
+  ],
+  "worst_markers": [
+    {
+      "marker": "tahun_2021_2026",
+      "label0_prevalence": 0.258085,
+      "label1_prevalence": 0.217376,
+      "gap_abs": 0.040709,
+      "gap_signed": -0.040709
+    },
+    {
+      "marker": "politik",
+      "label0_prevalence": 0.009178,
+      "label1_prevalence": 0.020325,
+      "gap_abs": 0.011147,
+      "gap_signed": 0.011147
+    },
+    {
+      "marker": "uncategorized",
+      "label0_prevalence": 0.0,
+      "label1_prevalence": 0.0,
+      "gap_abs": 0.0,
+      "gap_signed": 0.0
+    },
+    {
+      "marker": "akun",
+      "label0_prevalence": 0.0,
+      "label1_prevalence": 0.0,
+      "gap_abs": 0.0,
+      "gap_signed": 0.0
+    },
+    {
+      "marker": "facebook",
+      "label0_prevalence": 0.0,
+      "label1_prevalence": 0.0,
+      "gap_abs": 0.0,
+      "gap_signed": 0.0
+    }
+  ],
+  "label_counts": {
+    "0": 34322,
+    "1": 22583
+  }
+}

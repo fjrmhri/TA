@@ -1,0 +1,58 @@
+{
+  "test_csv": "D:\\TA\\code\\Berita_Hoax\\data\\processed\\test.csv",
+  "rows": 8630,
+  "model_source": "hub",
+  "model_id": "fjrmhri/Deteksi_Hoax_TA",
+  "num_labels": 2,
+  "fakta_class_id": 0,
+  "hoax_class_id": 1,
+  "id2label": {
+    "0": "Fakta",
+    "1": "Hoaks"
+  },
+  "label2id": {
+    "Fakta": 0,
+    "Hoaks": 1
+  },
+  "hoax_threshold": 0.5,
+  "calibration_loaded": false,
+  "raw_pred_id_distribution": {
+    "0": 7076,
+    "1": 1554
+  },
+  "pred_distribution": {
+    "0": 7076,
+    "1": 1554
+  },
+  "challenge_ready": true,
+  "metrics": {
+    "accuracy": 0.7769409038238703,
+    "f1_macro": 0.7300429417419416,
+    "precision_macro": 0.8639768230638779,
+    "recall_macro": 0.7233400402414487,
+    "f1_macro_dup": 0.7300429417419416,
+    "precision_weighted": 0.8376233176366246,
+    "recall_weighted": 0.7769409038238703,
+    "f1_weighted": 0.7518426060736026,
+    "fakta_precision": 0.7279536461277558,
+    "fakta_recall": 1.0,
+    "fakta_f1": 0.8425615441236608,
+    "hoax_precision": 1.0,
+    "hoax_recall": 0.44668008048289737,
+    "hoax_f1": 0.6175243393602226,
+    "confusion_matrix": [
+      [
+        5151,
+        0
+      ],
+      [
+        1925,
+        1554
+      ]
+    ],
+    "tn": 5151,
+    "fp": 0,
+    "fn": 1925,
+    "tp": 1554
+  }
+}

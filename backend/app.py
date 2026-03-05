@@ -1,6 +1,7 @@
 import logging
 import os
 import re
+import json
 from pathlib import Path
 from typing import Dict, List
 
@@ -20,6 +21,7 @@ NER_MODEL_ID = os.getenv("NER_MODEL_ID", "cahya/bert-base-indonesian-NER")
 HF_TOKEN = os.getenv("HF_TOKEN")
 FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN")
 ORANGE_THRESHOLD = float(os.getenv("ORANGE_THRESHOLD", "0.65"))
+DEFAULT_HOAX_THRESHOLD = float(os.getenv("HOAX_THRESHOLD", "0.5"))
 MAX_LENGTH = int(os.getenv("MAX_LENGTH", "256"))
 MAX_INPUT_CHARS = int(os.getenv("MAX_INPUT_CHARS", "50000"))
 BATCH_SIZE = int(os.getenv("BATCH_SIZE", "16"))
@@ -31,11 +33,30 @@ LOCAL_MODEL_PATH = Path(
 PROCESSED_TEST_PATH = Path(
     os.getenv("PROCESSED_TEST_PATH", str(ROOT_DIR / "data" / "processed" / "test.csv"))
 )
+CALIBRATION_PATH = Path(
+    os.getenv("CALIBRATION_PATH", str(LOCAL_MODEL_PATH / "calibration.json"))
+)
 
 PARAGRAPH_SPLIT_RE = re.compile(r"(?:\r?\n){2,}")
 SENTENCE_RE = re.compile(r"[^.!?]+(?:[.!?]+(?:[\"”’)\]]+)?)|[^.!?]+$")
 HOAX_LABEL_TOKENS = ("hoaks", "hoax", "fake", "false", "disinfo", "misinfo")
 FAKTA_LABEL_TOKENS = ("fakta", "fact", "true", "valid", "nonhoax", "non-hoax")
+INFERENCE_CLEAN_PATTERNS = [
+    (re.compile(r"(?i)\buncategorized\b"), " "),
+    (re.compile(r"(?i)\b(?:facebook|twitter|x\.com|tiktok|youtube|instagram|whatsapp)\b"), " "),
+    (re.compile(r"(?i)\bakun\b[^.!?\n]{0,140}\bunggah\b[^.!?\n]*"), " "),
+    (re.compile(r"(?i)\bbaca juga:\s*[^.!?\n]*"), " "),
+    (re.compile(r"(?i)\blihat juga:\s*[^.!?\n]*"), " "),
+    (re.compile(r"(?i)\badvertisement\b\s*scroll to continue with content"), " "),
+    (re.compile(r"(?i)\bturnbackhoax(?:s)?\b"), " "),
+    (re.compile(r"(?i)\bcnn indonesia\b"), " "),
+    (re.compile(r"(?i)\bkompas\.com\b"), " "),
+    (re.compile(r"(?i)\bdetik(?:com)?\b"), " "),
+    (re.compile(r"(?i)\bmafindo\b"), " "),
+    (re.compile(r"(?i)\b\d{1,2}\s*[/-]\s*\d{1,2}\s*[/-]\s*\d{2,4}\b"), " "),
+    (re.compile(r"(?i)\b\d{1,2}\s+\d{1,2}\s+\d{4}\b"), " "),
+    (re.compile(r"(?i)\b\d{1,2}:\d{2}\s*wib\b"), " "),
+]
 
 
 class AnalyzeRequest(BaseModel):
@@ -68,11 +89,19 @@ LABEL2ID: Dict[str, int] = {"Fakta": 0, "Hoaks": 1}
 NUM_LABELS = 2
 FAKTA_CLASS_ID = 0
 HOAX_CLASS_ID = 1
+HOAX_THRESHOLD = DEFAULT_HOAX_THRESHOLD
+CALIBRATION_LOADED = False
 STARTUP_SANITY: Dict[str, object] = {
     "checked": False,
     "status": "not_run",
     "message": "startup sanity belum dijalankan",
 }
+CHALLENGE_SANITY_SENTENCES = [
+    "Beredar unggahan yang mengklaim ada rekrutmen CPNS fiktif dan masyarakat diminta transfer biaya pendaftaran.",
+    "PT Transjakarta melakukan modifikasi layanan pada empat rute untuk meningkatkan kenyamanan penumpang.",
+    "Video lama diklaim sebagai kericuhan terbaru dan narasi itu ramai dibagikan di media sosial.",
+    "Pemerintah daerah akan membahas penertiban izin fasilitas olahraga di area permukiman.",
+]
 
 
 def _float(value: float) -> float:
@@ -88,6 +117,15 @@ def _hf_auth_kwargs() -> Dict:
 
 def _normalize_label(name: str) -> str:
     return re.sub(r"[^a-z0-9\-]+", "", str(name).strip().lower())
+
+
+def _normalize_unit_text(text: str) -> str:
+    cleaned = str(text)
+    for pattern, replacement in INFERENCE_CLEAN_PATTERNS:
+        cleaned = pattern.sub(replacement, cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    cleaned = cleaned.strip(" -:;,.")
+    return cleaned
 
 
 def _resolve_label_maps(model_config) -> None:
@@ -132,9 +170,14 @@ def _predict_batch(sentences: List[str]) -> List[Dict]:
         return []
 
     rows: List[Dict] = []
+    normalized_sentences = [_normalize_unit_text(s) for s in sentences]
+    normalized_sentences = [s for s in normalized_sentences if s]
+    if not normalized_sentences:
+        return rows
+
     with torch.inference_mode():
-        for start_idx in range(0, len(sentences), BATCH_SIZE):
-            batch = sentences[start_idx : start_idx + BATCH_SIZE]
+        for start_idx in range(0, len(normalized_sentences), BATCH_SIZE):
+            batch = normalized_sentences[start_idx : start_idx + BATCH_SIZE]
             encoded = CLASSIFIER_TOKENIZER(
                 batch,
                 truncation=True,
@@ -151,16 +194,16 @@ def _predict_batch(sentences: List[str]) -> List[Dict]:
                 values = prob_tensor.tolist()
                 prob_hoax = values[HOAX_CLASS_ID] if HOAX_CLASS_ID < len(values) else 0.0
                 prob_fakta = values[FAKTA_CLASS_ID] if FAKTA_CLASS_ID < len(values) else 0.0
-                label_name = ID2LABEL.get(int(pred_id), str(pred_id))
-                is_hoax = _normalize_label(label_name) in {"hoaks", "hoax", "fake", "false"}
-                label = "Hoaks" if is_hoax else "Fakta"
+                threshold_pred_id = 1 if prob_hoax >= HOAX_THRESHOLD else 0
+                label = "Hoaks" if threshold_pred_id == 1 else "Fakta"
                 confidence = max(prob_hoax, prob_fakta)
                 color = "orange" if confidence < ORANGE_THRESHOLD else ("red" if label == "Hoaks" else "green")
                 rows.append(
                     {
                         "text": text,
                         "label": label,
-                        "pred_id": int(pred_id),
+                        "pred_id": int(threshold_pred_id),
+                        "argmax_id": int(pred_id),
                         "prob_hoax": _float(prob_hoax),
                         "prob_fakta": _float(prob_fakta),
                         "confidence": _float(confidence),
@@ -168,6 +211,39 @@ def _predict_batch(sentences: List[str]) -> List[Dict]:
                     }
                 )
     return rows
+
+
+def _load_calibration() -> None:
+    global HOAX_THRESHOLD, CALIBRATION_LOADED
+    HOAX_THRESHOLD = DEFAULT_HOAX_THRESHOLD
+    CALIBRATION_LOADED = False
+
+    if not CALIBRATION_PATH.exists():
+        LOGGER.warning(
+            "Calibration file tidak ditemukan: %s. Menggunakan fallback threshold=%.3f",
+            CALIBRATION_PATH,
+            HOAX_THRESHOLD,
+        )
+        return
+
+    try:
+        payload = json.loads(CALIBRATION_PATH.read_text(encoding="utf-8"))
+        candidate = payload.get("best_threshold", payload.get("threshold"))
+        if candidate is None:
+            raise ValueError("key best_threshold/threshold tidak ditemukan")
+        value = float(candidate)
+        if not (0.0 <= value <= 1.0):
+            raise ValueError(f"threshold out of range: {value}")
+        HOAX_THRESHOLD = value
+        CALIBRATION_LOADED = True
+        LOGGER.info("Calibration loaded | path=%s | hoax_threshold=%.3f", CALIBRATION_PATH, HOAX_THRESHOLD)
+    except Exception as exc:
+        LOGGER.warning(
+            "Gagal membaca calibration file %s (%s). Menggunakan fallback threshold=%.3f",
+            CALIBRATION_PATH,
+            exc,
+            HOAX_THRESHOLD,
+        )
 
 
 def _load_classifier() -> None:
@@ -206,13 +282,22 @@ def _load_classifier() -> None:
     CLASSIFIER_MODEL.to(DEVICE)
     CLASSIFIER_MODEL.eval()
     _resolve_label_maps(CLASSIFIER_MODEL.config)
+    _load_calibration()
     LOGGER.info(
-        "Classifier ready | source=%s | device=%s | num_labels=%s | id2label=%s | label2id=%s",
+        (
+            "Classifier ready | source=%s | device=%s | num_labels=%s | "
+            "id2label=%s | label2id=%s | fakta_class_id=%s | hoax_class_id=%s | "
+            "hoax_threshold=%.3f | calibration_loaded=%s"
+        ),
         MODEL_SOURCE,
         DEVICE,
         NUM_LABELS,
         ID2LABEL,
         LABEL2ID,
+        FAKTA_CLASS_ID,
+        HOAX_CLASS_ID,
+        HOAX_THRESHOLD,
+        CALIBRATION_LOADED,
     )
 
 
@@ -243,8 +328,12 @@ def _split_sentences(paragraph: str) -> List[str]:
     if not normalized:
         return []
     sentences = [match.group(0).strip() for match in SENTENCE_RE.finditer(normalized)]
+    sentences = [_normalize_unit_text(sent) for sent in sentences]
     sentences = [sent for sent in sentences if sent]
-    return sentences if sentences else [normalized]
+    if sentences:
+        return sentences
+    fallback = _normalize_unit_text(normalized)
+    return [fallback] if fallback else []
 
 
 def _extract_entities(text: str) -> List[Dict]:
@@ -310,14 +399,17 @@ def _run_startup_sanity() -> None:
         if len(samples) < 2:
             samples = df_test["text"].astype(str).head(2).tolist()
 
-        preds = _predict_batch([str(s) for s in samples if str(s).strip()])
-        pred_labels = {row["label"] for row in preds}
-        if len(pred_labels) < 2:
+        sanity_inputs = [str(s) for s in samples if str(s).strip()]
+        sanity_inputs.extend(CHALLENGE_SANITY_SENTENCES)
+        preds = _predict_batch(sanity_inputs)
+        pred_ids = {int(row["pred_id"]) for row in preds}
+        if len(pred_ids) < 2:
             STARTUP_SANITY = {
                 "checked": True,
                 "status": "warning",
                 "message": "startup sanity: prediksi sampel hanya satu kelas (potensi collapse).",
-                "pred_labels": sorted(pred_labels),
+                "pred_ids": sorted(pred_ids),
+                "num_samples_checked": len(sanity_inputs),
             }
             LOGGER.warning(STARTUP_SANITY["message"])
             return
@@ -326,7 +418,8 @@ def _run_startup_sanity() -> None:
             "checked": True,
             "status": "ok",
             "message": "startup sanity: kedua kelas muncul pada sampel processed test.",
-            "pred_labels": sorted(pred_labels),
+            "pred_ids": sorted(pred_ids),
+            "num_samples_checked": len(sanity_inputs),
         }
         LOGGER.info(STARTUP_SANITY["message"])
     except Exception as exc:
@@ -366,6 +459,10 @@ def health() -> Dict[str, object]:
         "num_labels": NUM_LABELS,
         "id2label": {str(k): v for k, v in ID2LABEL.items()},
         "label2id": LABEL2ID,
+        "fakta_class_id": int(FAKTA_CLASS_ID),
+        "hoax_class_id": int(HOAX_CLASS_ID),
+        "hoax_threshold": float(HOAX_THRESHOLD),
+        "calibration_loaded": bool(CALIBRATION_LOADED),
         "startup_sanity": STARTUP_SANITY,
     }
 
@@ -418,6 +515,8 @@ def analyze(payload: AnalyzeRequest) -> Dict[str, object]:
                     "sentence_index": sentence_idx,
                     "text": row["text"],
                     "label": row["label"],
+                    "pred_id": row["pred_id"],
+                    "argmax_id": row["argmax_id"],
                     "prob_hoax": row["prob_hoax"],
                     "prob_fakta": row["prob_fakta"],
                     "confidence": row["confidence"],
@@ -457,6 +556,12 @@ def analyze(payload: AnalyzeRequest) -> Dict[str, object]:
             "model_id": MODEL_ID,
             "max_length": MAX_LENGTH,
             "num_labels": NUM_LABELS,
+            "fakta_class_id": int(FAKTA_CLASS_ID),
+            "hoax_class_id": int(HOAX_CLASS_ID),
+            "hoax_threshold": float(HOAX_THRESHOLD),
+            "calibration_loaded": bool(CALIBRATION_LOADED),
+            "id2label": {str(k): v for k, v in ID2LABEL.items()},
+            "label2id": LABEL2ID,
         },
         "summary": {
             "num_paragraphs": len(paragraph_responses),
